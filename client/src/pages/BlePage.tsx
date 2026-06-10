@@ -1,4 +1,4 @@
-import { Clock3, PlugZap, RefreshCw, Save, Unplug } from "lucide-react";
+import { PlugZap, RefreshCw, Save, Unplug } from "lucide-react";
 import { FormEvent, useState } from "react";
 import { AppSnapshot, CompanionConfig } from "../shared/protocol";
 import { StatusPill } from "../components/StatusPill";
@@ -39,48 +39,6 @@ export function BlePage({ snapshot }: { snapshot: AppSnapshot }) {
           </button>
         </div>
       </div>
-
-      <form className="panel schedule-panel" onSubmit={save}>
-        <div className="panel-title">
-          <Clock3 size={18} />
-          <span>Display Schedule</span>
-        </div>
-        <label className="schedule-toggle">
-          <span>
-            <strong>Automatic screen</strong>
-            <small>Use the computer clock to keep the board on schedule</small>
-          </span>
-          <input
-            type="checkbox"
-            checked={draft.displayScheduleEnabled}
-            onChange={(event) => setDraft({ ...draft, displayScheduleEnabled: event.target.checked })}
-          />
-        </label>
-        <div className="time-grid">
-          <label>
-            Screen off
-            <input
-              type="time"
-              value={draft.displayOffTime}
-              disabled={!draft.displayScheduleEnabled}
-              onChange={(event) => setDraft({ ...draft, displayOffTime: event.target.value })}
-            />
-          </label>
-          <label>
-            Screen on
-            <input
-              type="time"
-              value={draft.displayOnTime}
-              disabled={!draft.displayScheduleEnabled}
-              onChange={(event) => setDraft({ ...draft, displayOnTime: event.target.value })}
-            />
-          </label>
-        </div>
-        <button className="primary" type="submit">
-          <Save size={16} />
-          <span>Apply schedule</span>
-        </button>
-      </form>
 
       <form className="panel wide" onSubmit={save}>
         <div className="panel-title">

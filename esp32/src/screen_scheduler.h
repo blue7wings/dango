@@ -5,20 +5,16 @@
 
 class ScreenScheduler {
  public:
-  explicit ScreenScheduler(St7789DisplayDriver& display);
+  explicit ScreenScheduler(DisplayDriver& display);
 
-  void configure(
-      bool enabled,
-      const String& offTime,
-      const String& onTime,
-      uint64_t timestampMs,
-      int16_t timezoneOffsetMinutes);
+  void configure(bool enabled, const String& offTime, const String& onTime,
+                 uint64_t timestampMs, int16_t timezoneOffsetMinutes);
   void syncClock(uint64_t timestampMs);
-  void syncClock(uint64_t timestampMs, int16_t timezoneOffsetMinutes);
   void tick();
+  bool isScreenOff() const { return !screenOn; }
 
  private:
-  St7789DisplayDriver& display;
+  DisplayDriver& display;
   bool enabled = false;
   bool clockSynced = false;
   bool screenOn = true;
@@ -31,5 +27,4 @@ class ScreenScheduler {
 
   uint16_t parseMinute(const String& value, uint16_t fallback) const;
   bool shouldScreenBeOff(uint16_t localMinute) const;
-  void applySchedule(uint32_t now);
 };

@@ -3,8 +3,7 @@ import {
   CompanionConfig,
   DEFAULT_CHARACTERISTIC_UUID,
   DEFAULT_SERVICE_UUID,
-  Expression,
-  EXPRESSIONS,
+  DeviceCommand,
   HookAgentConfig,
   HookInstallRequest,
   HookInstallResult,
@@ -17,7 +16,9 @@ type ApiLike = {
   updateConfig: (patch: Partial<CompanionConfig>) => Promise<AppSnapshot>;
   reconnect: () => Promise<AppSnapshot>;
   disconnect: () => Promise<AppSnapshot>;
-  sendExpression: (expression: Expression) => Promise<AppSnapshot>;
+  sendCommand: (command: DeviceCommand) => Promise<AppSnapshot>;
+  syncDisplaySchedule: () => Promise<AppSnapshot>;
+  syncIdleTimeout: () => Promise<AppSnapshot>;
   getAgentConfigs: () => Promise<unknown>;
   installAgentHooks: (request: HookInstallRequest) => Promise<HookInstallResult>;
   onSnapshot: (callback: SnapshotListener) => () => void;
@@ -25,7 +26,7 @@ type ApiLike = {
 
 const localApiBase = "http://127.0.0.1:8787";
 
-function createLog(expression: Expression, detail: string): LogEntry {
+function createLog(detail: string): LogEntry {
   const now = new Date();
   return {
     id: `${now.getTime()}-${Math.random().toString(16).slice(2)}`,
@@ -33,7 +34,7 @@ function createLog(expression: Expression, detail: string): LogEntry {
     timestamp: now.getTime(),
     agent: "browser-preview",
     hook: "system",
-    expression,
+    expression: "idle",
     result: "info",
     detail
   };
@@ -51,16 +52,17 @@ class BrowserHttpApi {
       characteristicUUID: DEFAULT_CHARACTERISTIC_UUID,
       displayScheduleEnabled: false,
       displayOffTime: "22:00",
-      displayOnTime: "08:00"
+      displayOnTime: "08:00",
+      idleTimeoutMinutes: 10
     },
     currentEvent: "stop",
-    currentExpression: "idle",
+    currentCommand: { face: "idle", indicator: "off", display: "on" },
     ble: {
       status: "disconnected",
       device: null,
       lastError: "Desktop service is not reachable"
     },
-    logs: [createLog("idle", "Waiting for the Electron desktop service")]
+    logs: [createLog("Waiting for the Electron desktop service")]
   };
 
   async getSnapshot() {
@@ -83,8 +85,18 @@ class BrowserHttpApi {
     return this.snapshot;
   }
 
-  async sendExpression(expression: Expression) {
-    await this.postSnapshot("/api/expression", { expression });
+  async sendCommand(command: DeviceCommand) {
+    await this.postSnapshot("/api/command", command);
+    return this.snapshot;
+  }
+
+  async syncDisplaySchedule() {
+    await this.postSnapshot("/api/settings/schedule");
+    return this.snapshot;
+  }
+
+  async syncIdleTimeout() {
+    await this.postSnapshot("/api/settings/idle-timeout");
     return this.snapshot;
   }
 
@@ -140,7 +152,6 @@ class BrowserHttpApi {
     } catch {
       this.snapshot = {
         ...this.snapshot,
-        logs: [createLog(this.snapshot.currentExpression, `Preview only: ${EXPRESSIONS[this.snapshot.currentExpression]}`), ...this.snapshot.logs].slice(0, 50),
         ble: {
           ...this.snapshot.ble,
           lastError: "Start npm run dev and use the Electron desktop service for BLE"

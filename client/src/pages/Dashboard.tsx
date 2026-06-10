@@ -12,10 +12,10 @@ export function Dashboard({ snapshot }: { snapshot: AppSnapshot }) {
           <Activity size={18} />
           <span>Current State</span>
         </div>
-        <EyePreview expression={snapshot.currentExpression} />
+        <EyePreview face={snapshot.currentCommand.face} />
         <div className="state-row">
           <span>{snapshot.currentEvent}</span>
-          <strong>{snapshot.currentExpression}</strong>
+          <strong>{snapshot.currentCommand.face} / {snapshot.currentCommand.indicator}</strong>
         </div>
       </div>
 

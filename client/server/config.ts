@@ -13,7 +13,8 @@ const defaults: CompanionConfig = {
   characteristicUUID: DEFAULT_CHARACTERISTIC_UUID,
   displayScheduleEnabled: false,
   displayOffTime: "22:00",
-  displayOnTime: "08:00"
+  displayOnTime: "08:00",
+  idleTimeoutMinutes: 10
 };
 
 export class ConfigService {

@@ -5,14 +5,16 @@
 
 struct BleCommand {
   String type;
-  String event;
   String expression;
-  String source;
+  String indicator;
+  String display;
+  // display_schedule fields
   bool scheduleEnabled = false;
   String displayOffTime;
   String displayOnTime;
   uint64_t timestamp = 0;
   int16_t timezoneOffset = 0;
+  int16_t idleTimeoutMinutes = -1;
 };
 
 using AgentEventCallback = std::function<void(const BleCommand& command)>;

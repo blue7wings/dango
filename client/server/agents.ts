@@ -23,7 +23,7 @@ const CODEX_EVENTS: Record<string, string> = {
   PreToolUse: "tool_call_start",
   PostToolUse: "tool_call_end",
   PermissionRequest: "permission_request",
-  Stop: "stop"
+  Stop: "success"
 };
 
 const KIRO_EVENTS: Record<string, string> = {
@@ -31,7 +31,7 @@ const KIRO_EVENTS: Record<string, string> = {
   userPromptSubmit: "user_prompt_submit",
   preToolUse: "tool_call_start",
   postToolUse: "tool_call_end",
-  stop: "stop"
+  stop: "success"
 };
 
 function commandFor(event: string, source: HookAgentId): string {
@@ -112,6 +112,10 @@ async function atomicWriteJson(filePath: string, value: JsonObject): Promise<voi
   await rename(temporaryPath, filePath);
 }
 
+function isDangoCommand(cmd: string): boolean {
+  return cmd.includes(HOOK_ENDPOINT);
+}
+
 function mergeCodexHooks(root: JsonObject): number {
   const hooks = hooksObject(root);
   let added = 0;
@@ -119,14 +123,14 @@ function mergeCodexHooks(root: JsonObject): number {
   for (const [hookName, event] of Object.entries(CODEX_EVENTS)) {
     const entries = eventEntries(hooks, hookName);
     const command = commandFor(event, "codex");
-    if (!commandsIn(entries).includes(command)) {
-      entries.push({
-        matcher: "*",
-        hooks: [{ type: "command", command, timeout: 5 }]
-      });
-      added += 1;
-    }
-    hooks[hookName] = entries;
+    // Remove any existing Dango entries so we always write the latest version.
+    const filtered = entries.filter((entry) => !commandsIn([entry]).some(isDangoCommand));
+    filtered.push({
+      matcher: "*",
+      hooks: [{ type: "command", command, timeout: 5 }]
+    });
+    hooks[hookName] = filtered;
+    added += 1;
   }
   return added;
 }
@@ -138,15 +142,14 @@ function mergeKiroHooks(root: JsonObject): number {
   for (const [hookName, event] of Object.entries(KIRO_EVENTS)) {
     const entries = eventEntries(hooks, hookName);
     const command = commandFor(event, "kiro");
-    if (!commandsIn(entries).includes(command)) {
-      entries.push({
-        ...(hookName === "preToolUse" || hookName === "postToolUse" ? { matcher: "*" } : {}),
-        command,
-        description: "Sync agent state to Dango"
-      });
-      added += 1;
-    }
-    hooks[hookName] = entries;
+    const filtered = entries.filter((entry) => !commandsIn([entry]).some(isDangoCommand));
+    filtered.push({
+      ...(hookName === "preToolUse" || hookName === "postToolUse" ? { matcher: "*" } : {}),
+      command,
+      description: "Sync agent state to Dango"
+    });
+    hooks[hookName] = filtered;
+    added += 1;
   }
   return added;
 }

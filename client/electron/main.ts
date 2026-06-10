@@ -7,7 +7,7 @@ import { LogService } from "../server/logger.js";
 import { AppState } from "../server/state.js";
 import { WebhookServer } from "../server/webhook.js";
 import { inspectAgentHooks, installAgentHooks } from "../server/agents.js";
-import { CompanionConfig, Expression, HookInstallRequest } from "../src/shared/protocol.js";
+import { CompanionConfig, DeviceCommand, HookInstallRequest } from "../src/shared/protocol.js";
 import { createTray } from "./tray.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -21,14 +21,19 @@ const ble = new BleManager(state, logs);
 const webhook = new WebhookServer(state, {
   reconnect: () => ble.scanAndConnect(),
   disconnect: () => ble.disconnect(),
-  sendExpression: async (expression) => {
-    const message = state.setExpression(expression);
+  sendCommand: async (command) => {
+    const message = state.sendCommand(command);
     await ble.send(message);
   },
   updateConfig: async (patch) => {
     const next = state.updateConfig(patch);
-    await ble.syncDisplaySchedule(next);
     if (next.autoConnect) void ble.scanAndConnect(next);
+  },
+  syncDisplaySchedule: async () => {
+    await ble.syncDisplaySchedule();
+  },
+  syncIdleTimeout: async () => {
+    await ble.syncIdleTimeout();
   }
 });
 
@@ -66,8 +71,15 @@ function registerIpc(): void {
   ipcMain.handle("app:updateConfig", async (_event, patch: Partial<CompanionConfig>) => {
     const next = state.updateConfig(patch);
     await webhook.start(next.webhookPort);
-    await ble.syncDisplaySchedule(next);
     if (next.autoConnect) void ble.scanAndConnect(next);
+    return state.snapshot();
+  });
+  ipcMain.handle("settings:syncSchedule", async () => {
+    await ble.syncDisplaySchedule();
+    return state.snapshot();
+  });
+  ipcMain.handle("settings:syncIdleTimeout", async () => {
+    await ble.syncIdleTimeout();
     return state.snapshot();
   });
   ipcMain.handle("ble:reconnect", async () => {
@@ -78,8 +90,8 @@ function registerIpc(): void {
     await ble.disconnect();
     return state.snapshot();
   });
-  ipcMain.handle("expr:send", async (_event, expression: Expression) => {
-    const message = state.setExpression(expression);
+  ipcMain.handle("expr:send", async (_event, command: DeviceCommand) => {
+    const message = state.sendCommand(command);
     await ble.send(message);
     return state.snapshot();
   });

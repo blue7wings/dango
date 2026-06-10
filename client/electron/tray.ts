@@ -12,10 +12,10 @@ export function createTray(state: AppState, ble: BleManager, openWindow: () => v
       ? `${snapshot.ble.device.name} (${snapshot.ble.device.rssi ?? "n/a"} dBm)`
       : "No device";
 
-    tray.setToolTip(`Dango: ${snapshot.currentExpression}`);
+    tray.setToolTip(`Dango: ${snapshot.currentCommand.face} / ${snapshot.currentCommand.indicator}`);
     tray.setContextMenu(
       Menu.buildFromTemplate([
-        { label: `State: ${snapshot.currentExpression}`, enabled: false },
+        { label: `State: ${snapshot.currentCommand.face} / ${snapshot.currentCommand.indicator}`, enabled: false },
         { label: `Device: ${deviceLine}`, enabled: false },
         { label: `BLE: ${snapshot.ble.status}`, enabled: false },
         { type: "separator" },

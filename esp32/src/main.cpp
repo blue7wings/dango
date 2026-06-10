@@ -7,9 +7,9 @@
 #include "state_machine.h"
 
 St7789DisplayDriver display;
-StateMachine stateMachine;
 AnimationEngine animation(display);
 ScreenScheduler screenScheduler(display);
+
 AgentBleServer bleServer([](const BleCommand& command) {
   if (command.type == "display_schedule") {
     screenScheduler.configure(
@@ -18,12 +18,18 @@ AgentBleServer bleServer([](const BleCommand& command) {
         command.displayOnTime,
         command.timestamp,
         command.timezoneOffset);
-    Serial.printf(
-        "display_schedule enabled=%d off=%s on=%s timezone=%d\n",
+    Serial.printf("display_schedule enabled=%d off=%s on=%s\n",
         command.scheduleEnabled,
         command.displayOffTime.c_str(),
-        command.displayOnTime.c_str(),
-        command.timezoneOffset);
+        command.displayOnTime.c_str());
+    return;
+  }
+
+  if (command.type == "idle_timeout") {
+    if (command.idleTimeoutMinutes >= 0) {
+      animation.setIdleTimeout(command.idleTimeoutMinutes);
+      Serial.printf("idle_timeout=%d min\n", command.idleTimeoutMinutes);
+    }
     return;
   }
 
@@ -31,28 +37,41 @@ AgentBleServer bleServer([](const BleCommand& command) {
     screenScheduler.syncClock(command.timestamp);
   }
 
-  Expression next = command.expression.length() > 0
-      ? expressionFromString(command.expression)
-      : stateMachine.applyEvent(command.event);
-
-  if (command.expression.length() > 0) {
-    // Desktop can send an explicit expression for the test controls.
-    stateMachine.setExpression(next);
+  if (command.idleTimeoutMinutes >= 0) {
+    animation.setIdleTimeout(command.idleTimeoutMinutes);
   }
-  animation.setExpression(next);
-  Serial.printf("event=%s expression=%s\n", command.event.c_str(), expressionToString(next).c_str());
+
+  DeviceState state;
+  state.expression = command.expression.length() > 0
+      ? expressionFromString(command.expression)
+      : Expression::Idle;
+  state.indicator = command.indicator.length() > 0
+      ? indicatorFromString(command.indicator)
+      : Indicator::Off;
+  state.display = command.display.length() > 0
+      ? displayPowerFromString(command.display)
+      : DisplayPower::On;
+
+  animation.setState(state);
+  Serial.printf("face=%s indicator=%s display=%s\n",
+      command.expression.c_str(),
+      command.indicator.c_str(),
+      command.display.c_str());
 });
 
 void setup() {
   Serial.begin(115200);
   display.begin();
-  animation.setExpression(Expression::Idle);
+  DeviceState initial;
+  animation.setState(initial);
   bleServer.begin();
   Serial.println("AgentFaceESP32 BLE ready");
 }
 
 void loop() {
   screenScheduler.tick();
-  animation.tick();
+  if (!screenScheduler.isScreenOff()) {
+    animation.tick();
+  }
   delay(5);
 }

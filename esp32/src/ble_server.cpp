@@ -14,22 +14,20 @@ class CommandCallbacks : public NimBLECharacteristicCallbacks {
     if (payload.length() == 0) return;
 
     BleCommand command;
-    command.event = payload;
-    command.source = "unknown";
 
-    // JSON is the primary protocol; plain event text is accepted as a fallback.
     JsonDocument doc;
     DeserializationError err = deserializeJson(doc, payload);
     if (!err) {
-      command.type = doc["type"] | "agent_event";
-      command.event = doc["event"] | command.event;
-      command.expression = doc["expression"] | "";
-      command.source = doc["source"] | "unknown";
+      command.type = doc["type"] | "device_command";
+      command.expression = doc["face"] | "";
+      command.indicator = doc["indicator"] | "";
+      command.display = doc["display"] | "";
       command.scheduleEnabled = doc["enabled"] | false;
       command.displayOffTime = doc["off"] | "22:00";
       command.displayOnTime = doc["on"] | "08:00";
       command.timestamp = doc["timestamp"].as<uint64_t>();
       command.timezoneOffset = doc["timezoneOffset"] | 0;
+      command.idleTimeoutMinutes = doc["idleTimeoutMinutes"] | -1;
     }
 
     if (onAgentEvent) onAgentEvent(command);

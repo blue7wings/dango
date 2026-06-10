@@ -1,9 +1,15 @@
-export type Expression =
-  | "idle"
-  | "working"
-  | "tool_call_start"
-  | "tool_call_end"
-  | "error";
+export type Face = "idle" | "focused";
+
+export type Indicator =
+  | "off"
+  | "green_solid"
+  | "green_breathe"
+  | "yellow_solid"
+  | "yellow_breathe"
+  | "red_solid"
+  | "red_breathe";
+
+export type DisplayPower = "on" | "off";
 
 export type AgentEvent =
   | "session_start"
@@ -13,6 +19,7 @@ export type AgentEvent =
   | "tool_call_end"
   | "tool_use"
   | "tool_done"
+  | "success"
   | "permission_request"
   | "error"
   | "stop";
@@ -30,11 +37,18 @@ export interface CompanionConfig {
   displayScheduleEnabled: boolean;
   displayOffTime: string;
   displayOnTime: string;
+  idleTimeoutMinutes: number;
+}
+
+export interface DeviceCommand {
+  face: Face;
+  indicator: Indicator;
+  display: DisplayPower;
 }
 
 export interface AgentMessage {
   event: AgentEvent;
-  expression: Expression;
+  command: DeviceCommand;
   source: AgentSource;
   timestamp: number;
 }
@@ -45,7 +59,8 @@ export interface LogEntry {
   timestamp: number;
   agent: AgentSource;
   hook: AgentEvent | "ble" | "system";
-  expression?: Expression;
+  expression?: Face;
+  indicator?: Indicator;
   result: "success" | "error" | "info";
   detail: string;
 }
@@ -59,7 +74,7 @@ export interface DeviceSnapshot {
 export interface AppSnapshot {
   config: CompanionConfig;
   currentEvent: AgentEvent;
-  currentExpression: Expression;
+  currentCommand: DeviceCommand;
   ble: {
     status: BleStatus;
     device: DeviceSnapshot | null;
@@ -104,56 +119,34 @@ export interface HookInstallResult {
 export const DEFAULT_SERVICE_UUID = "7b8f9a10-2f43-4a6f-8b1e-6f4d3c2b1a90";
 export const DEFAULT_CHARACTERISTIC_UUID = "7b8f9a11-2f43-4a6f-8b1e-6f4d3c2b1a90";
 
-export const EXPRESSIONS: Record<Expression, string> = {
-  idle: "| |",
-  working: "| |",
-  tool_call_start: "| |",
-  tool_call_end: "| |",
-  error: "| |"
-};
+export const FACES: Face[] = ["idle", "focused"];
+export const INDICATORS: Indicator[] = ["off", "green_solid", "green_breathe", "yellow_solid", "yellow_breathe", "red_solid", "red_breathe"];
+export const DISPLAY_POWERS: DisplayPower[] = ["on", "off"];
 
-export const EVENT_MAP: Record<AgentEvent, Expression> = {
-  session_start: "idle",
-  user_prompt_submit: "working",
-  ai_running: "working",
-  tool_call_start: "tool_call_start",
-  tool_call_end: "tool_call_end",
-  tool_use: "tool_call_start",
-  tool_done: "tool_call_end",
-  permission_request: "error",
-  error: "error",
-  stop: "idle"
-};
-
-const PRIORITY: Record<Expression, number> = {
-  error: 60,
-  tool_call_start: 45,
-  working: 40,
-  tool_call_end: 35,
-  idle: 0
+export const EVENT_COMMAND_MAP: Record<AgentEvent, Omit<DeviceCommand, "display">> = {
+  session_start: { face: "focused", indicator: "green_breathe" },
+  user_prompt_submit: { face: "focused", indicator: "green_breathe" },
+  ai_running: { face: "focused", indicator: "green_breathe" },
+  tool_call_start: { face: "focused", indicator: "yellow_breathe" },
+  tool_call_end: { face: "focused", indicator: "green_breathe" },
+  tool_use: { face: "focused", indicator: "yellow_breathe" },
+  tool_done: { face: "focused", indicator: "green_breathe" },
+  success: { face: "focused", indicator: "green_solid" },
+  permission_request: { face: "focused", indicator: "red_solid" },
+  error: { face: "focused", indicator: "red_solid" },
+  stop: { face: "idle", indicator: "off" }
 };
 
 export function isAgentEvent(value: unknown): value is AgentEvent {
-  return typeof value === "string" && value in EVENT_MAP;
+  return typeof value === "string" && value in EVENT_COMMAND_MAP;
 }
 
-export function resolveExpression(event: AgentEvent, current: Expression): Expression {
-  const next = EVENT_MAP[event];
-
-  if (event === "stop") return "idle";
-  if (event === "session_start") return "idle";
-  if (event === "error") return "error";
-  if (event === "permission_request") return "error";
-
-  // Error stays active until an explicit stop or new session resets it.
-  if (current === "error") return current;
-
-  if (event === "tool_call_end" || event === "tool_done") return "tool_call_end";
-  return PRIORITY[next] >= PRIORITY[current] ? next : current;
+export function resolveCommand(event: AgentEvent): DeviceCommand {
+  return { ...EVENT_COMMAND_MAP[event], display: "on" };
 }
 
-export function createBlePayload(message: AgentMessage): string {
-  return JSON.stringify(message);
+export function createBlePayload(command: DeviceCommand): string {
+  return JSON.stringify(command);
 }
 
 export function createDisplaySchedulePayload(config: CompanionConfig): string {
@@ -164,5 +157,12 @@ export function createDisplaySchedulePayload(config: CompanionConfig): string {
     on: config.displayOnTime,
     timestamp: Date.now(),
     timezoneOffset: -new Date().getTimezoneOffset()
+  });
+}
+
+export function createIdleTimeoutPayload(config: CompanionConfig): string {
+  return JSON.stringify({
+    type: "idle_timeout",
+    idleTimeoutMinutes: config.idleTimeoutMinutes
   });
 }

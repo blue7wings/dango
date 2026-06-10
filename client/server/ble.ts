@@ -3,7 +3,8 @@ import {
   AgentMessage,
   CompanionConfig,
   createBlePayload,
-  createDisplaySchedulePayload
+  createDisplaySchedulePayload,
+  createIdleTimeoutPayload
 } from "../src/shared/protocol.js";
 import { AppState } from "./state.js";
 import { LogService } from "./logger.js";
@@ -97,7 +98,8 @@ export class BleManager extends EventEmitter {
       this.logs.add({
         agent: message.source,
         hook: "ble",
-        expression: message.expression,
+        expression: message.command.face,
+        indicator: message.command.indicator,
         result: "error",
         detail: "BLE characteristic is not connected"
       });
@@ -105,12 +107,13 @@ export class BleManager extends EventEmitter {
     }
 
     try {
-      const payload = Buffer.from(createBlePayload(message), "utf8");
+      const payload = Buffer.from(createBlePayload(message.command), "utf8");
       await this.characteristic.writeAsync(payload, false);
       this.logs.add({
         agent: message.source,
         hook: "ble",
-        expression: message.expression,
+        expression: message.command.face,
+        indicator: message.command.indicator,
         result: "success",
         detail: payload.toString("utf8")
       });
@@ -120,7 +123,7 @@ export class BleManager extends EventEmitter {
       this.logs.add({
         agent: message.source,
         hook: "ble",
-        expression: message.expression,
+        expression: message.command.face,
         result: "error",
         detail
       });
@@ -139,7 +142,27 @@ export class BleManager extends EventEmitter {
         agent: "desktop",
         hook: "ble",
         result: "success",
-        detail: `Display schedule synced: ${config.displayScheduleEnabled ? `${config.displayOffTime}-${config.displayOnTime}` : "off"}`
+        detail: `Schedule synced: ${config.displayScheduleEnabled ? `${config.displayOffTime}-${config.displayOnTime}` : "off"}`
+      });
+      return true;
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      this.logs.add({ agent: "desktop", hook: "ble", result: "error", detail });
+      return false;
+    }
+  }
+
+  async syncIdleTimeout(config: CompanionConfig = this.state.snapshot().config): Promise<boolean> {
+    if (!this.characteristic) return false;
+
+    const payload = createIdleTimeoutPayload(config);
+    try {
+      await this.characteristic.writeAsync(Buffer.from(payload, "utf8"), false);
+      this.logs.add({
+        agent: "desktop",
+        hook: "ble",
+        result: "success",
+        detail: `Idle timeout synced: ${config.idleTimeoutMinutes}min`
       });
       return true;
     } catch (error) {
@@ -210,6 +233,7 @@ export class BleManager extends EventEmitter {
     });
     this.logs.add({ agent: "desktop", hook: "ble", result: "success", detail: "Connected to ESP32" });
     await this.syncDisplaySchedule(config);
+    await this.syncIdleTimeout(config);
   }
 
   private scheduleReconnect(): void {

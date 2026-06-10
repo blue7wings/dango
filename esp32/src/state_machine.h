@@ -4,19 +4,26 @@
 
 enum class Expression {
   Idle,
-  Working,
-  ToolCallStart,
-  ToolCallEnd,
-  Error
+  Working
 };
 
-class StateMachine {
- public:
-  Expression current() const;
-  Expression applyEvent(const String& event);
-  void setExpression(Expression expression);
+enum class Indicator {
+  Off,
+  GreenSolid,
+  GreenBreathe,
+  YellowSolid,
+  YellowBreathe,
+  RedSolid,
+  RedBreathe
+};
 
- private:
-  Expression active = Expression::Idle;
-  int priority(Expression expression) const;
+enum class DisplayPower {
+  On,
+  Off
+};
+
+struct DeviceState {
+  Expression expression = Expression::Idle;
+  Indicator indicator = Indicator::Off;
+  DisplayPower display = DisplayPower::On;
 };

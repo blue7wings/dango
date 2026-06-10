@@ -2,6 +2,15 @@
 #include "claude_logo.h"
 #include <SPI.h>
 
+static uint16_t lerpColor565(uint16_t c0, uint16_t c1, float t) {
+  uint8_t r0 = (c0 >> 11) & 0x1F, g0 = (c0 >> 5) & 0x3F, b0 = c0 & 0x1F;
+  uint8_t r1 = (c1 >> 11) & 0x1F, g1 = (c1 >> 5) & 0x3F, b1 = c1 & 0x1F;
+  uint8_t r = r0 + (int)(((int)r1 - r0) * t);
+  uint8_t g = g0 + (int)(((int)g1 - g0) * t);
+  uint8_t b = b0 + (int)(((int)b1 - b0) * t);
+  return (r << 11) | (g << 5) | b;
+}
+
 void St7789DisplayDriver::begin() {
   pinMode(TFT_BLK, OUTPUT);
   setBacklight(true);
@@ -17,7 +26,13 @@ void St7789DisplayDriver::begin() {
   red = tft.color565(235, 68, 68);
 
   tft.fillScreen(orange);
-  drawClaudeLogo(ST77XX_WHITE);
+  for (uint16_t i = 0; i < LOGO_TRI_COUNT; i++) {
+    tft.fillTriangle(
+        pgm_read_word(&LOGO_TRIS[i][0]), pgm_read_word(&LOGO_TRIS[i][1]),
+        pgm_read_word(&LOGO_TRIS[i][2]), pgm_read_word(&LOGO_TRIS[i][3]),
+        pgm_read_word(&LOGO_TRIS[i][4]), pgm_read_word(&LOGO_TRIS[i][5]),
+        ST77XX_WHITE);
+  }
   delay(1200);
   clear();
 }
@@ -30,43 +45,19 @@ void St7789DisplayDriver::clear() {
   tft.fillScreen(orange);
   hasSmoothFrame = false;
   lastExtra = {0, 0, 0, 0};
+  lastIndicator = Indicator::Off;
 }
 
-void St7789DisplayDriver::renderEyes(const char* leftEye, const char* rightEye, int16_t ox, int16_t oy) {
-  clear();
-  const int16_t leftCx = (DISP_W - (EYE_W * 2 + EYE_GAP)) / 2 + EYE_OX + ox + EYE_W / 2;
-  const int16_t rightCx = leftCx + EYE_W + EYE_GAP;
-  const int16_t cy = (DISP_H - EYE_H) / 2 - EYE_OY + EYE_H / 2 + oy;
-  drawGlyph(leftEye, leftCx, cy);
-  drawGlyph(rightEye, rightCx, cy);
-}
-
-void St7789DisplayDriver::drawClaudeLogo(uint16_t color) {
-  // Same filled-triangle renderer and coordinates as the example firmware.
-  for (uint16_t i = 0; i < LOGO_TRI_COUNT; i++) {
-    tft.fillTriangle(
-        pgm_read_word(&LOGO_TRIS[i][0]), pgm_read_word(&LOGO_TRIS[i][1]),
-        pgm_read_word(&LOGO_TRIS[i][2]), pgm_read_word(&LOGO_TRIS[i][3]),
-        pgm_read_word(&LOGO_TRIS[i][4]), pgm_read_word(&LOGO_TRIS[i][5]),
-        color);
-  }
-}
-
-void St7789DisplayDriver::renderSmoothEyes(const EyeGeometry& leftEye, const EyeGeometry& rightEye, EyeStyle style, bool visible) {
-  const DrawRect nextLeft = boundsForEye(leftEye, style);
-  const DrawRect nextRight = boundsForEye(rightEye, style);
-  const bool solidEyeStyle = isSolidEyeStyle(style);
-  const DrawRect nextExtra = (style == EyeStyle::Working || style == EyeStyle::ToolCallStart || style == EyeStyle::Error) ? DrawRect{190, 10, 38, 38} : DrawRect{0, 0, 0, 0};
+void St7789DisplayDriver::renderEyes(const EyeGeometry& leftEye, const EyeGeometry& rightEye, EyeStyle style, bool visible) {
+  const DrawRect nextLeft = boundsForEye(leftEye);
+  const DrawRect nextRight = boundsForEye(rightEye);
 
   if (!hasSmoothFrame) {
     clear();
     hasSmoothFrame = true;
-  } else if (!solidEyeStyle || !visible) {
+  } else if (!visible) {
     eraseRect(unionRect(lastLeft, nextLeft));
     eraseRect(unionRect(lastRight, nextRight));
-    eraseRect(unionRect(lastExtra, nextExtra));
-  } else {
-    if (lastExtra.w > 0 && nextExtra.w == 0) eraseRect(lastExtra);
   }
 
   if (!visible) {
@@ -75,79 +66,67 @@ void St7789DisplayDriver::renderSmoothEyes(const EyeGeometry& leftEye, const Eye
     return;
   }
 
-  switch (style) {
-    case EyeStyle::Block:
-    case EyeStyle::Working:
-    case EyeStyle::ToolCallStart:
-    case EyeStyle::ToolCallEnd:
-    case EyeStyle::Error:
-    default:
-      drawSmoothEye(leftEye);
-      drawSmoothEye(rightEye);
-      if (style == EyeStyle::Working) drawWorkingIndicator(leftEye.phase > 0.5f);
-      if (style == EyeStyle::ToolCallStart) drawToolCallIndicator(leftEye.phase > 0.5f);
-      if (style == EyeStyle::Error) drawErrorIndicator();
-      if (hasSmoothFrame) {
-        eraseOutsideNew(lastLeft, nextLeft);
-        eraseOutsideNew(lastRight, nextRight);
-      }
-      break;
+  drawSmoothEye(leftEye);
+  drawSmoothEye(rightEye);
+  if (hasSmoothFrame) {
+    eraseOutsideNew(lastLeft, nextLeft);
+    eraseOutsideNew(lastRight, nextRight);
   }
 
   lastLeft = nextLeft;
   lastRight = nextRight;
-  lastExtra = nextExtra;
 }
 
-void St7789DisplayDriver::drawGlyph(const char* glyph, int16_t cx, int16_t cy) {
-  const char c = glyph[0];
-  if (c == '>') {
-    drawChevron(cx, cy, true);
-    return;
-  }
-  if (c == '<') {
-    drawChevron(cx, cy, false);
-    return;
-  }
-  if (c == '-' || c == '_') {
-    const int16_t h = c == '_' ? 5 : 7;
-    tft.fillRect(cx - EYE_W / 2, cy - h / 2, EYE_W, h, ST77XX_BLACK);
-    return;
-  }
-  if (c == '|') {
-    tft.fillRect(cx - EYE_W / 2, cy - EYE_H / 2, EYE_W, EYE_H, ST77XX_BLACK);
-    return;
-  }
-  if (c == '+') {
-    tft.fillRect(cx - 5, cy - 25, 10, 50, ST77XX_BLACK);
-    tft.fillRect(cx - 25, cy - 5, 50, 10, ST77XX_BLACK);
-    return;
-  }
-  if (c == '^') {
-    for (int8_t t = -3; t <= 3; t++) {
-      tft.drawLine(cx - 18, cy + 12 + t, cx, cy - 18 + t, ST77XX_BLACK);
-      tft.drawLine(cx, cy - 18 + t, cx + 18, cy + 12 + t, ST77XX_BLACK);
-    }
-    return;
-  }
-  if (c == 'o' || c == 'O') {
-    tft.fillCircle(cx, cy, 18, ST77XX_BLACK);
-    tft.fillCircle(cx, cy, 8, orange);
-    return;
-  }
-  if (c == 'x' || c == 'X') {
-    for (int8_t t = -3; t <= 3; t++) {
-      tft.drawLine(cx - 18, cy - 18 + t, cx + 18, cy + 18 + t, ST77XX_BLACK);
-      tft.drawLine(cx + 18, cy - 18 + t, cx - 18, cy + 18 + t, ST77XX_BLACK);
-    }
+void St7789DisplayDriver::renderIndicator(Indicator indicator, float phase) {
+  const DrawRect indicatorRect = {190, 10, 38, 38};
+
+  if (indicator == Indicator::Off && lastIndicator != Indicator::Off) {
+    eraseRect(indicatorRect);
+    lastIndicator = Indicator::Off;
     return;
   }
 
-  // Character fallback supports simple legacy glyph rendering.
-  tft.setTextColor(ST77XX_BLACK);
-  tft.setTextSize(5);
-  tft.setCursor(cx - 15, cy - 22);
-  tft.print(c);
+  if (indicator == Indicator::Off) return;
+
+  uint16_t color = orange;
+  switch (indicator) {
+    case Indicator::GreenSolid:
+      color = green;
+      break;
+    case Indicator::GreenBreathe:
+      color = lerpColor565(orange, green, phase);
+      break;
+    case Indicator::YellowSolid:
+      color = yellow;
+      break;
+    case Indicator::YellowBreathe:
+      color = lerpColor565(orange, yellow, phase);
+      break;
+    case Indicator::RedSolid:
+      color = red;
+      break;
+    case Indicator::RedBreathe:
+      color = lerpColor565(orange, red, phase);
+      break;
+    default:
+      break;
+  }
+
+  drawCircleIndicator(color);
+  lastIndicator = indicator;
+}
+
+void St7789DisplayDriver::drawCircleIndicator(uint16_t color) {
+  const int16_t cx = 209;
+  const int16_t cy = 29;
+  const int16_t radius = 13;
+
+  for (int16_t angle = 0; angle < 360; angle += 3) {
+    const float radians = static_cast<float>(angle) * DEG_TO_RAD;
+    const int16_t x = roundf(cx + cosf(radians) * radius);
+    const int16_t y = roundf(cy + sinf(radians) * radius);
+    tft.fillCircle(x, y, 2, color);
+  }
 }
 
 void St7789DisplayDriver::drawSmoothEye(const EyeGeometry& eye) {
@@ -164,66 +143,15 @@ void St7789DisplayDriver::drawSmoothEye(const EyeGeometry& eye) {
   }
 }
 
-void St7789DisplayDriver::drawWorkingIndicator(bool active) {
-  const int16_t cx = 209;
-  const int16_t cy = 29;
-  const int16_t radius = 13;
-  const uint16_t color = active ? green : orange;
+DrawRect St7789DisplayDriver::boundsForEye(const EyeGeometry& eye) const {
+  const int16_t pad = 2;
+  int16_t x = roundf(eye.cx - eye.w / 2.0f) - pad;
+  int16_t y = roundf(eye.cy - eye.h / 2.0f) - pad;
+  int16_t rw = roundf(eye.w) + pad * 2;
+  int16_t rh = roundf(eye.h) + pad * 2;
 
-  // A 300-degree ring leaves a small gap like the android status LED reference.
-  for (int16_t angle = 25; angle <= 325; angle += 3) {
-    const float radians = static_cast<float>(angle) * DEG_TO_RAD;
-    const int16_t x = roundf(cx + cosf(radians) * radius);
-    const int16_t y = roundf(cy + sinf(radians) * radius);
-    tft.fillCircle(x, y, 2, color);
-  }
-}
-
-void St7789DisplayDriver::drawErrorIndicator() {
-  const int16_t cx = 209;
-  const int16_t cy = 29;
-  const int16_t radius = 13;
-
-  for (int16_t angle = 25; angle <= 325; angle += 3) {
-    const float radians = static_cast<float>(angle) * DEG_TO_RAD;
-    const int16_t x = roundf(cx + cosf(radians) * radius);
-    const int16_t y = roundf(cy + sinf(radians) * radius);
-    tft.fillCircle(x, y, 2, red);
-  }
-}
-
-void St7789DisplayDriver::drawToolCallIndicator(bool active) {
-  const int16_t cx = 209;
-  const int16_t cy = 29;
-  const int16_t radius = 13;
-  const uint16_t color = active ? yellow : orange;
-
-  for (int16_t angle = 25; angle <= 325; angle += 3) {
-    const float radians = static_cast<float>(angle) * DEG_TO_RAD;
-    const int16_t x = roundf(cx + cosf(radians) * radius);
-    const int16_t y = roundf(cy + sinf(radians) * radius);
-    tft.fillCircle(x, y, 2, color);
-  }
-}
-
-DrawRect St7789DisplayDriver::boundsForEye(const EyeGeometry& eye, EyeStyle style) const {
-  int16_t pad = isSolidEyeStyle(style) ? 2 : 8;
-  float w = eye.w;
-  float h = eye.h;
-
-  int16_t x = roundf(eye.cx - w / 2.0f) - pad;
-  int16_t y = roundf(eye.cy - h / 2.0f) - pad;
-  int16_t rw = roundf(w) + pad * 2;
-  int16_t rh = roundf(h) + pad * 2;
-
-  if (x < 0) {
-    rw += x;
-    x = 0;
-  }
-  if (y < 0) {
-    rh += y;
-    y = 0;
-  }
+  if (x < 0) { rw += x; x = 0; }
+  if (y < 0) { rh += y; y = 0; }
   if (x + rw > DISP_W) rw = DISP_W - x;
   if (y + rh > DISP_H) rh = DISP_H - y;
   return {x, y, max<int16_t>(0, rw), max<int16_t>(0, rh)};
@@ -262,20 +190,4 @@ void St7789DisplayDriver::eraseOutsideNew(const DrawRect& oldRect, const DrawRec
   eraseRect({oldRect.x, iy2, oldRect.w, static_cast<int16_t>(oldBottom - iy2)});
   eraseRect({oldRect.x, iy1, static_cast<int16_t>(ix1 - oldRect.x), static_cast<int16_t>(iy2 - iy1)});
   eraseRect({ix2, iy1, static_cast<int16_t>(oldRight - ix2), static_cast<int16_t>(iy2 - iy1)});
-}
-
-bool St7789DisplayDriver::isSolidEyeStyle(EyeStyle style) const {
-  return style == EyeStyle::Block || style == EyeStyle::Working || style == EyeStyle::ToolCallStart || style == EyeStyle::ToolCallEnd || style == EyeStyle::Error;
-}
-
-void St7789DisplayDriver::drawChevron(int16_t cx, int16_t cy, bool rightFacing) {
-  for (int8_t t = -5; t <= 5; t++) {
-    if (rightFacing) {
-      tft.drawLine(cx - 15, cy - 30 + t, cx + 15, cy + t, ST77XX_BLACK);
-      tft.drawLine(cx + 15, cy + t, cx - 15, cy + 30 + t, ST77XX_BLACK);
-    } else {
-      tft.drawLine(cx + 15, cy - 30 + t, cx - 15, cy + t, ST77XX_BLACK);
-      tft.drawLine(cx - 15, cy + t, cx + 15, cy + 30 + t, ST77XX_BLACK);
-    }
-  }
 }

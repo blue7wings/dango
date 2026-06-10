@@ -75,12 +75,35 @@ The Vite renderer dev server uses:
 Supported endpoints:
 
 ```bash
+# Agent hook (GET or POST)
+curl "http://127.0.0.1:8787/hook?event=tool_use&source=codex"
 curl -X POST http://127.0.0.1:8787/hook \
   -H 'content-type: application/json' \
   -d '{"event":"tool_use","source":"codex"}'
 
-curl "http://127.0.0.1:8787/hook?event=tool_use&source=codex"
+# Direct device command
+curl -X POST http://127.0.0.1:8787/api/command \
+  -H 'content-type: application/json' \
+  -d '{"face":"focused","indicator":"green_breathe","display":"on"}'
+
+# App snapshot
+curl http://127.0.0.1:8787/api/snapshot
+
+# BLE control
+curl -X POST http://127.0.0.1:8787/api/ble/reconnect
+curl -X POST http://127.0.0.1:8787/api/ble/disconnect
+
+# Health check
+curl http://127.0.0.1:8787/health
 ```
+
+### Device Command Fields
+
+| Field | Values |
+| --- | --- |
+| face | `idle`, `focused` |
+| indicator | `off`, `green_solid`, `green_breathe`, `yellow_solid`, `yellow_breathe`, `red_solid`, `red_breathe` |
+| display | `on`, `off` |
 
 ## Desktop Build
 
@@ -121,6 +144,7 @@ type AgentEvent =
   | "tool_call_end"
   | "tool_use"
   | "tool_done"
+  | "success"
   | "permission_request"
   | "error"
   | "stop";
@@ -128,33 +152,21 @@ type AgentEvent =
 
 Event mapping:
 
-| Event | Expression |
-| --- | --- |
-| stop | idle |
-| session_start | idle |
-| user_prompt_submit | working |
-| ai_running | working |
-| tool_call_start | tool_call_start (yellow indicator) |
-| tool_call_end | tool_call_end (indicator off) |
-| tool_use | tool_call_start (legacy alias) |
-| tool_done | tool_call_end (legacy alias) |
-| permission_request | error |
-| error | error |
+| Event | Expression | Indicator |
+| --- | --- | --- |
+| session_start | working | 绿灯闪烁 |
+| user_prompt_submit | working | 绿灯闪烁 |
+| ai_running | working | 绿灯闪烁 |
+| tool_call_start | tool_call_start | 黄灯亮 |
+| tool_use | tool_call_start | 黄灯亮 |
+| tool_call_end | working | 黄灯灭，回到绿灯闪烁 |
+| tool_done | working | 黄灯灭，回到绿灯闪烁 |
+| success | success | 绿灯常亮 |
+| permission_request | error | 红灯 |
+| error | error | 红灯 |
+| stop | idle | 灯灭 |
 
-The product exposes only five display states: `idle`, `working`,
-`tool_call_start`, `tool_call_end`, and `error`.
-
-State priority is implemented on both desktop and firmware:
-
-```txt
-error
-tool_call_start
-working
-tool_call_end
-idle
-```
-
-`error` stays active until `stop` or `session_start`.
+Each event maps directly to an expression. `tool_call_end` returns to the working state rather than staying dark.
 
 ## Codex Integration
 
@@ -175,7 +187,7 @@ Generated Codex hook shape:
     "PreToolUse": "dango-hook tool_call_start",
     "PostToolUse": "dango-hook tool_call_end",
     "PermissionRequest": "dango-hook permission_request",
-    "Stop": "dango-hook stop"
+    "Stop": "dango-hook success"
   }
 }
 ```

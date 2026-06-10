@@ -1,14 +1,16 @@
 import Fastify, { FastifyInstance } from "fastify";
 import cors from "@fastify/cors";
-import { AgentSource, CompanionConfig, Expression, EXPRESSIONS, HookInstallRequest, isAgentEvent } from "../src/shared/protocol.js";
+import { AgentSource, CompanionConfig, DeviceCommand, FACES, INDICATORS, DISPLAY_POWERS, HookInstallRequest, isAgentEvent } from "../src/shared/protocol.js";
 import { AppState } from "./state.js";
 import { inspectAgentHooks, installAgentHooks } from "./agents.js";
 
 interface DesktopControls {
   reconnect: () => Promise<void>;
   disconnect: () => Promise<void>;
-  sendExpression: (expression: Expression) => Promise<void>;
+  sendCommand: (command: DeviceCommand) => Promise<void>;
   updateConfig: (patch: Partial<CompanionConfig>) => Promise<void>;
+  syncDisplaySchedule: () => Promise<void>;
+  syncIdleTimeout: () => Promise<void>;
 }
 
 export class WebhookServer {
@@ -30,8 +32,8 @@ export class WebhookServer {
         return { success: false, error: "Invalid event" };
       }
       const source: AgentSource = typeof sourceRaw === "string" && sourceRaw.length > 0 ? sourceRaw : "unknown";
-      this.state.handleAgentEvent(eventRaw, source);
-      return { success: true };
+      const message = this.state.handleAgentEvent(eventRaw, source);
+      return { success: true, face: message.command.face };
     };
 
     server.post<{ Body: { event?: unknown; source?: unknown } }>("/hook", async (request, reply) => {
@@ -77,13 +79,35 @@ export class WebhookServer {
       return this.state.snapshot();
     });
 
-    server.post<{ Body: { expression?: unknown } }>("/api/expression", async (request, reply) => {
-      const expression = request.body?.expression;
-      if (typeof expression !== "string" || !(expression in EXPRESSIONS)) {
+    server.post("/api/settings/schedule", async () => {
+      await this.controls?.syncDisplaySchedule();
+      return this.state.snapshot();
+    });
+
+    server.post("/api/settings/idle-timeout", async () => {
+      await this.controls?.syncIdleTimeout();
+      return this.state.snapshot();
+    });
+
+    server.post<{ Body: { face?: unknown; indicator?: unknown; display?: unknown } }>("/api/command", async (request, reply) => {
+      const body = request.body as Record<string, unknown> | undefined;
+      const face = body?.face;
+      const indicator = body?.indicator;
+      const display = body?.display;
+      if (
+        (face !== undefined && !FACES.includes(face as any)) ||
+        (indicator !== undefined && !INDICATORS.includes(indicator as any)) ||
+        (display !== undefined && !DISPLAY_POWERS.includes(display as any))
+      ) {
         reply.code(400);
-        return { success: false, error: "Invalid expression" };
+        return { success: false, error: "Invalid command" };
       }
-      await this.controls?.sendExpression(expression as Expression);
+      const command: DeviceCommand = {
+        face: (face as any) ?? this.state.currentCommand.face,
+        indicator: (indicator as any) ?? this.state.currentCommand.indicator,
+        display: (display as any) ?? this.state.currentCommand.display
+      };
+      await this.controls?.sendCommand(command);
       return this.state.snapshot();
     });
 

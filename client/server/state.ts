@@ -6,16 +6,16 @@ import {
   AppSnapshot,
   BleStatus,
   CompanionConfig,
+  DeviceCommand,
   DeviceSnapshot,
-  Expression,
-  resolveExpression
+  resolveCommand
 } from "../src/shared/protocol.js";
 import { ConfigService } from "./config.js";
 import { LogService } from "./logger.js";
 
 export class AppState extends EventEmitter {
   currentEvent: AgentEvent = "stop";
-  currentExpression: Expression = "idle";
+  currentCommand: DeviceCommand = { face: "idle", indicator: "off", display: "on" };
   bleStatus: BleStatus = "idle";
   device: DeviceSnapshot | null = null;
   lastBleError: string | null = null;
@@ -28,13 +28,13 @@ export class AppState extends EventEmitter {
   }
 
   handleAgentEvent(event: AgentEvent, source: AgentSource): AgentMessage {
-    const expression = resolveExpression(event, this.currentExpression);
+    const command = resolveCommand(event);
     this.currentEvent = event;
-    this.currentExpression = expression;
+    this.currentCommand = command;
 
     const message: AgentMessage = {
       event,
-      expression,
+      command,
       source,
       timestamp: Date.now()
     };
@@ -42,30 +42,31 @@ export class AppState extends EventEmitter {
     this.logs.add({
       agent: source,
       hook: event,
-      expression,
+      expression: command.face,
+      indicator: command.indicator,
       result: "success",
-      detail: `Mapped ${event} to ${expression}`
+      detail: `${event} → ${command.face} / ${command.indicator}`
     });
     this.emit("agent-message", message);
     this.emit("changed", this.snapshot());
     return message;
   }
 
-  setExpression(expression: Expression, source: AgentSource = "desktop"): AgentMessage {
-    this.currentEvent = expression === "idle" ? "stop" : "ai_running";
-    this.currentExpression = expression;
+  sendCommand(command: DeviceCommand, source: AgentSource = "desktop"): AgentMessage {
+    this.currentCommand = command;
     const message: AgentMessage = {
       event: this.currentEvent,
-      expression,
+      command,
       source,
       timestamp: Date.now()
     };
     this.logs.add({
       agent: source,
       hook: "system",
-      expression,
+      expression: command.face,
+      indicator: command.indicator,
       result: "info",
-      detail: `Manual expression test: ${expression}`
+      detail: `Manual: ${command.face} / ${command.indicator} / ${command.display}`
     });
     this.emit("agent-message", message);
     this.emit("changed", this.snapshot());
@@ -89,7 +90,7 @@ export class AppState extends EventEmitter {
     return {
       config: this.configService.get(),
       currentEvent: this.currentEvent,
-      currentExpression: this.currentExpression,
+      currentCommand: this.currentCommand,
       ble: {
         status: this.bleStatus,
         device: this.device,
