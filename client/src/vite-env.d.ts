@@ -1,0 +1,18 @@
+/// <reference types="vite/client" />
+
+import type { AppSnapshot, CompanionConfig, Expression, HookInstallRequest, HookInstallResult } from "./shared/protocol";
+
+declare global {
+  interface Window {
+    clawdMochi?: {
+      getSnapshot: () => Promise<AppSnapshot>;
+      updateConfig: (patch: Partial<CompanionConfig>) => Promise<AppSnapshot>;
+      reconnect: () => Promise<AppSnapshot>;
+      disconnect: () => Promise<AppSnapshot>;
+      sendExpression: (expression: Expression) => Promise<AppSnapshot>;
+      getAgentConfigs: () => Promise<unknown>;
+      installAgentHooks: (request: HookInstallRequest) => Promise<HookInstallResult>;
+      onSnapshot: (callback: (snapshot: AppSnapshot) => void) => () => void;
+    };
+  }
+}

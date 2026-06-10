@@ -1,0 +1,66 @@
+{
+  "name": "clawd-mochi-client",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Desktop companion for syncing AI agent state to Clawd Mochi ESP32 over BLE.",
+  "type": "module",
+  "main": "dist-electron/electron/main.js",
+  "scripts": {
+    "dev": "concurrently -k \"vite --host 127.0.0.1 --port 5188 --strictPort\" \"tsc -p tsconfig.electron.json --watch\" \"wait-on http://127.0.0.1:5188 dist-electron/electron/main.js && electron .\"",
+    "build": "tsc -p tsconfig.electron.json && vite build",
+    "start": "electron .",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.electron.json --noEmit",
+    "package": "npm run build && electron-builder --dir",
+    "dist": "npm run build && electron-builder"
+  },
+  "dependencies": {
+    "@abandonware/noble": "^1.9.2-25",
+    "@fastify/cors": "^10.0.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron-store": "^10.0.1",
+    "fastify": "^5.1.0",
+    "lucide-react": "^0.468.0",
+    "pino": "^9.5.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "concurrently": "^9.1.0",
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.3",
+    "wait-on": "^8.0.1"
+  },
+  "build": {
+    "appId": "dev.clawdmochi.agentface",
+    "productName": "Clawd Mochi Companion",
+    "files": [
+      "dist",
+      "dist-electron",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Development"
+    }
+  }
+}
