@@ -2,7 +2,7 @@ import pino from "pino";
 import { AgentEvent, AgentSource, Expression, LogEntry } from "../src/shared/protocol.js";
 
 export class LogService {
-  private readonly logger = pino({ name: "clawd-mochi" });
+  private readonly logger = pino({ name: "dango" });
   private readonly entries: LogEntry[] = [];
 
   all(): LogEntry[] {

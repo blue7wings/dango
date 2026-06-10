@@ -1,6 +1,6 @@
-# Clawd Mochi Agent Companion
+# Dango Agent Companion
 
-Clawd Mochi Agent Companion is a cross-platform desktop app that receives AI Agent hook events and syncs the current state to an ESP32 desk companion over BLE.
+Dango Agent Companion is a cross-platform desktop app that receives AI Agent hook events and syncs the current state to an ESP32 desk companion over BLE.
 
 The ESP32 renders a low-resolution, character-style face inspired by the original `example` project. The firmware reuses the example hardware defaults for ESP32-C3 Super Mini + ST7789 1.54 inch 240x240 display:
 
@@ -37,7 +37,7 @@ esp32/
   include/        Hardware and BLE UUID config
   src/            BLE server, state machine, animation, display driver
 scripts/
-  clawd-mochi-codex-hook.sh
+  dango-codex-hook.sh
 ```
 
 ## BLE UUID Configuration
@@ -161,8 +161,8 @@ idle
 Use the included script:
 
 ```bash
-chmod +x scripts/clawd-mochi-codex-hook.sh
-scripts/clawd-mochi-codex-hook.sh tool_call_start
+chmod +x scripts/dango-codex-hook.sh
+scripts/dango-codex-hook.sh tool_call_start
 ```
 
 Generated Codex hook shape:
@@ -170,12 +170,12 @@ Generated Codex hook shape:
 ```json
 {
   "hooks": {
-    "SessionStart": "clawd-mochi-hook session_start",
-    "UserPromptSubmit": "clawd-mochi-hook user_prompt_submit",
-    "PreToolUse": "clawd-mochi-hook tool_call_start",
-    "PostToolUse": "clawd-mochi-hook tool_call_end",
-    "PermissionRequest": "clawd-mochi-hook permission_request",
-    "Stop": "clawd-mochi-hook stop"
+    "SessionStart": "dango-hook session_start",
+    "UserPromptSubmit": "dango-hook user_prompt_submit",
+    "PreToolUse": "dango-hook tool_call_start",
+    "PostToolUse": "dango-hook tool_call_end",
+    "PermissionRequest": "dango-hook permission_request",
+    "Stop": "dango-hook stop"
   }
 }
 ```

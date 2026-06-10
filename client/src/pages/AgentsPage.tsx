@@ -67,7 +67,7 @@ export function AgentsPage() {
       <div className="agent-toolbar">
         <div>
           <strong>Hook configuration</strong>
-          <span>Existing hooks are preserved. Clawd Mochi commands are appended only when missing.</span>
+          <span>Existing hooks are preserved. Dango commands are appended only when missing.</span>
         </div>
         <button className="icon-command" title="Refresh configurations" aria-label="Refresh configurations" onClick={() => void refresh()}>
           <RefreshCw size={16} className={loading ? "spin" : ""} />

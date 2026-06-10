@@ -1,6 +1,6 @@
 #pragma once
 
-// Defaults are copied from example/clawd_mochi.ino.
+// Defaults are copied from example/dango.ino.
 #define TFT_CS 4
 #define TFT_DC 1
 #define TFT_RST 2

@@ -12,7 +12,7 @@ export function createTray(state: AppState, ble: BleManager, openWindow: () => v
       ? `${snapshot.ble.device.name} (${snapshot.ble.device.rssi ?? "n/a"} dBm)`
       : "No device";
 
-    tray.setToolTip(`Clawd Mochi: ${snapshot.currentExpression}`);
+    tray.setToolTip(`Dango: ${snapshot.currentExpression}`);
     tray.setContextMenu(
       Menu.buildFromTemplate([
         { label: `State: ${snapshot.currentExpression}`, enabled: false },

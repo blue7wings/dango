@@ -29,7 +29,7 @@ export default function App() {
         <div className="brand">
           <div className="brand-mark">- -</div>
           <div>
-            <strong>Clawd Mochi</strong>
+            <strong>Dango</strong>
             <span>Agent Companion</span>
           </div>
         </div>

@@ -12,7 +12,7 @@ import {
 
 type JsonObject = Record<string, unknown>;
 
-const CONFIG_HOME = process.env.CLAWD_MOCHI_CONFIG_HOME ?? os.homedir();
+const CONFIG_HOME = process.env.DANGO_CONFIG_HOME ?? os.homedir();
 const CODEX_PATH = path.join(CONFIG_HOME, ".codex", "hooks.json");
 const KIRO_DIR = path.join(CONFIG_HOME, ".kiro", "agents");
 const HOOK_ENDPOINT = "http://127.0.0.1:8787/hook";
@@ -107,7 +107,7 @@ async function isWritable(filePath: string): Promise<boolean> {
 
 async function atomicWriteJson(filePath: string, value: JsonObject): Promise<void> {
   await mkdir(path.dirname(filePath), { recursive: true });
-  const temporaryPath = `${filePath}.clawd-mochi-${process.pid}.tmp`;
+  const temporaryPath = `${filePath}.dango-${process.pid}.tmp`;
   await writeFile(temporaryPath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
   await rename(temporaryPath, filePath);
 }
@@ -142,7 +142,7 @@ function mergeKiroHooks(root: JsonObject): number {
       entries.push({
         ...(hookName === "preToolUse" || hookName === "postToolUse" ? { matcher: "*" } : {}),
         command,
-        description: "Sync agent state to Clawd Mochi"
+        description: "Sync agent state to Dango"
       });
       added += 1;
     }
@@ -190,7 +190,7 @@ export async function inspectAgentHooks(): Promise<HookAgentConfig[]> {
     {
       id: "codex",
       name: "Codex",
-      description: "Append Clawd Mochi commands to ~/.codex/hooks.json.",
+      description: "Append Dango commands to ~/.codex/hooks.json.",
       path: CODEX_PATH,
       targets: [await targetFor(CODEX_PATH, CODEX_EVENTS, "codex")]
     },

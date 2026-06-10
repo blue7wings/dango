@@ -16,6 +16,6 @@ const api = {
   }
 };
 
-contextBridge.exposeInMainWorld("clawdMochi", api);
+contextBridge.exposeInMainWorld("dango", api);
 
-export type ClawdMochiApi = typeof api;
+export type DangoApi = typeof api;

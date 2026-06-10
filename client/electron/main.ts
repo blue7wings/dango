@@ -38,7 +38,7 @@ async function createWindow(): Promise<void> {
     height: 760,
     minWidth: 900,
     minHeight: 640,
-    title: "Clawd Mochi Companion",
+    title: "Dango Companion",
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,

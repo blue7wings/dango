@@ -1,8 +1,8 @@
 {
-  "name": "clawd-mochi-client",
+  "name": "dango-client",
   "version": "0.1.0",
   "private": true,
-  "description": "Desktop companion for syncing AI agent state to Clawd Mochi ESP32 over BLE.",
+  "description": "Desktop companion for syncing AI agent state to Dango ESP32 over BLE.",
   "type": "module",
   "main": "dist-electron/electron/main.js",
   "scripts": {
@@ -36,8 +36,8 @@
     "wait-on": "^8.0.1"
   },
   "build": {
-    "appId": "dev.clawdmochi.agentface",
-    "productName": "Clawd Mochi Companion",
+    "appId": "dev.dango.agentface",
+    "productName": "Dango Companion",
     "files": [
       "dist",
       "dist-electron",

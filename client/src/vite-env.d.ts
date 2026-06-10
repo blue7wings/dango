@@ -4,7 +4,7 @@ import type { AppSnapshot, CompanionConfig, Expression, HookInstallRequest, Hook
 
 declare global {
   interface Window {
-    clawdMochi?: {
+    dango?: {
       getSnapshot: () => Promise<AppSnapshot>;
       updateConfig: (patch: Partial<CompanionConfig>) => Promise<AppSnapshot>;
       reconnect: () => Promise<AppSnapshot>;

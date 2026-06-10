@@ -170,4 +170,4 @@ class BrowserHttpApi {
   }
 }
 
-export const companionApi: ApiLike = window.clawdMochi ?? new BrowserHttpApi();
+export const companionApi: ApiLike = window.dango ?? new BrowserHttpApi();

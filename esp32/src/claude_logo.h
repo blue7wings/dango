@@ -2,7 +2,7 @@
 
 #include <Arduino.h>
 
-// Reused verbatim from example/clawd_mochi.ino.
+// Reused verbatim from example/dango.ino.
 #define LOGO_TRI_COUNT 162
 static const int16_t LOGO_TRIS[][6] PROGMEM = {
   {120,105,65,134,100,114},{120,105,100,114,101,113},{120,105,101,113,100,112},
