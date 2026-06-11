@@ -13,6 +13,7 @@ import { createTray } from "./tray.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 let mainWindow: BrowserWindow | null = null;
+let isQuitting = false;
 
 const config = new ConfigService();
 const logs = new LogService();
@@ -56,6 +57,15 @@ async function createWindow(): Promise<void> {
   } else {
     await mainWindow.loadFile(path.join(__dirname, "../../dist/index.html"));
   }
+
+  mainWindow.on("close", (event) => {
+    // Closing the window hides to tray; the app only exits via the tray Quit
+    // action, which sets isQuitting before triggering app.quit().
+    if (!isQuitting) {
+      event.preventDefault();
+      mainWindow?.hide();
+    }
+  });
 
   mainWindow.on("closed", () => {
     mainWindow = null;
@@ -123,11 +133,31 @@ app.on("activate", () => {
 });
 
 app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") app.quit();
+  // No-op: closing windows hides the app to the tray on every platform.
+  // The process only exits through the tray Quit action.
 });
 
-app.on("before-quit", async () => {
-  state.dispose();
-  await webhook.stop();
-  await ble.disconnect();
+app.on("before-quit", (event) => {
+  if (isQuitting) return;
+  // Run async teardown (stop the webhook server on 8787, disconnect BLE)
+  // before the process exits, then quit for real.
+  event.preventDefault();
+  isQuitting = true;
+  void (async () => {
+    try {
+      state.dispose();
+      await webhook.stop();
+      await ble.disconnect();
+    } catch (error) {
+      logs.add({
+        source: "desktop",
+        category: "system",
+        event: "shutdown",
+        result: "error",
+        detail: `Shutdown cleanup failed: ${String(error)}`
+      });
+    } finally {
+      app.quit();
+    }
+  })();
 });
