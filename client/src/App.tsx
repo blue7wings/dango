@@ -8,12 +8,13 @@ import { ExpressionsPage } from "./pages/ExpressionsPage";
 import { LogsPage } from "./pages/LogsPage";
 import { DebugPage } from "./pages/DebugPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import dangoLogo from "./assets/dango-logo.png";
 
 type Page = "dashboard" | "ble" | "agents" | "expressions" | "logs" | "debug" | "settings";
 
 const nav = [
   { id: "dashboard" as const, label: "Dashboard", icon: Gauge },
-  { id: "ble" as const, label: "BLE", icon: Radio },
+  { id: "ble" as const, label: "Connection", icon: Radio },
   { id: "agents" as const, label: "Agents", icon: Bot },
   { id: "expressions" as const, label: "Expressions", icon: SlidersHorizontal },
   { id: "debug" as const, label: "Debug", icon: Bug },
@@ -31,7 +32,9 @@ export default function App() {
     <main className="shell">
       <aside>
         <div className="brand">
-          <div className="brand-mark">- -</div>
+          <div className="brand-mark">
+            <img src={dangoLogo} alt="Dango" />
+          </div>
           <div>
             <strong>Dango</strong>
             <span>Agent Companion</span>
@@ -52,11 +55,7 @@ export default function App() {
 
       <section className="content">
         <header>
-          <div>
-            <span className="eyebrow">127.0.0.1:{snapshot.config.webhookPort}</span>
-            <h1>{nav.find((item) => item.id === page)?.label}</h1>
-          </div>
-          <div className="header-face">{snapshot.currentCommand.face} / {snapshot.currentCommand.indicator}</div>
+          <h1>{nav.find((item) => item.id === page)?.label}</h1>
         </header>
 
         {page === "dashboard" && <Dashboard snapshot={snapshot} />}

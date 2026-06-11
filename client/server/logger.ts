@@ -1,5 +1,5 @@
 import pino from "pino";
-import { AgentEvent, AgentSource, Face, Indicator, LogEntry } from "../src/shared/protocol.js";
+import { AgentSource, Face, Indicator, LogCategory, LogEntry } from "../src/shared/protocol.js";
 
 export class LogService {
   private readonly logger = pino({ name: "dango" });
@@ -10,8 +10,9 @@ export class LogService {
   }
 
   add(input: {
-    agent: AgentSource;
-    hook: AgentEvent | "ble" | "system";
+    source: AgentSource;
+    category: LogCategory;
+    event: string;
     expression?: Face;
     indicator?: Indicator;
     result: "success" | "error" | "info";
@@ -29,7 +30,16 @@ export class LogService {
     this.entries.splice(250);
 
     const log = input.result === "error" ? this.logger.error.bind(this.logger) : this.logger.info.bind(this.logger);
-    log({ agent: input.agent, hook: input.hook, expression: input.expression, indicator: input.indicator }, input.detail);
+    log(
+      {
+        source: input.source,
+        category: input.category,
+        event: input.event,
+        expression: input.expression,
+        indicator: input.indicator
+      },
+      input.detail
+    );
     return entry;
   }
 }

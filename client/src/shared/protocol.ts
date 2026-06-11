@@ -27,6 +27,7 @@ export type AgentEvent =
 export type AgentSource = "codex" | "cursor" | "claude-code" | "kiro" | string;
 
 export type BleStatus = "idle" | "scanning" | "connected" | "disconnected" | "error";
+export type LogCategory = "hook" | "ble" | "system";
 
 export interface CompanionConfig {
   webhookPort: number;
@@ -57,8 +58,9 @@ export interface LogEntry {
   id: string;
   time: string;
   timestamp: number;
-  agent: AgentSource;
-  hook: AgentEvent | "ble" | "system";
+  source: AgentSource;
+  category: LogCategory;
+  event: string;
   expression?: Face;
   indicator?: Indicator;
   result: "success" | "error" | "info";

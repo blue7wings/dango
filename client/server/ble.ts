@@ -77,7 +77,7 @@ export class BleManager extends EventEmitter {
       await this.connectPeripheral(peripheral, config);
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
-      this.logs.add({ agent: "desktop", hook: "ble", result: "error", detail });
+      this.logs.add({ source: "desktop", category: "ble", event: "connection", result: "error", detail });
       this.state.setBle("error", null, detail);
       this.scheduleReconnect();
     }
@@ -96,8 +96,9 @@ export class BleManager extends EventEmitter {
   async send(message: AgentMessage): Promise<boolean> {
     if (!this.characteristic) {
       this.logs.add({
-        agent: message.source,
-        hook: "ble",
+        source: message.source,
+        category: "ble",
+        event: "command_send",
         expression: message.command.face,
         indicator: message.command.indicator,
         result: "error",
@@ -110,8 +111,9 @@ export class BleManager extends EventEmitter {
       const payload = Buffer.from(createBlePayload(message.command), "utf8");
       await this.characteristic.writeAsync(payload, false);
       this.logs.add({
-        agent: message.source,
-        hook: "ble",
+        source: message.source,
+        category: "ble",
+        event: "command_send",
         expression: message.command.face,
         indicator: message.command.indicator,
         result: "success",
@@ -121,8 +123,9 @@ export class BleManager extends EventEmitter {
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       this.logs.add({
-        agent: message.source,
-        hook: "ble",
+        source: message.source,
+        category: "ble",
+        event: "command_send",
         expression: message.command.face,
         result: "error",
         detail
@@ -139,15 +142,16 @@ export class BleManager extends EventEmitter {
     try {
       await this.characteristic.writeAsync(Buffer.from(payload, "utf8"), false);
       this.logs.add({
-        agent: "desktop",
-        hook: "ble",
+        source: "desktop",
+        category: "ble",
+        event: "schedule_sync",
         result: "success",
         detail: `Schedule synced: ${config.displayScheduleEnabled ? `${config.displayOffTime}-${config.displayOnTime}` : "off"}`
       });
       return true;
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
-      this.logs.add({ agent: "desktop", hook: "ble", result: "error", detail });
+      this.logs.add({ source: "desktop", category: "ble", event: "schedule_sync", result: "error", detail });
       return false;
     }
   }
@@ -159,15 +163,16 @@ export class BleManager extends EventEmitter {
     try {
       await this.characteristic.writeAsync(Buffer.from(payload, "utf8"), false);
       this.logs.add({
-        agent: "desktop",
-        hook: "ble",
+        source: "desktop",
+        category: "ble",
+        event: "idle_timeout_sync",
         result: "success",
         detail: `Idle timeout synced: ${config.idleTimeoutMinutes}min`
       });
       return true;
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
-      this.logs.add({ agent: "desktop", hook: "ble", result: "error", detail });
+      this.logs.add({ source: "desktop", category: "ble", event: "idle_timeout_sync", result: "error", detail });
       return false;
     }
   }
@@ -231,7 +236,13 @@ export class BleManager extends EventEmitter {
       name: peripheral.advertisement.localName ?? config.deviceName,
       rssi: peripheral.rssi ?? null
     });
-    this.logs.add({ agent: "desktop", hook: "ble", result: "success", detail: "Connected to ESP32" });
+    this.logs.add({
+      source: "desktop",
+      category: "ble",
+      event: "connected",
+      result: "success",
+      detail: "Connected to ESP32"
+    });
     await this.syncDisplaySchedule(config);
     await this.syncIdleTimeout(config);
   }

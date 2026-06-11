@@ -2,6 +2,7 @@ import { Activity, Cpu, Radio, Zap } from "lucide-react";
 import { AppSnapshot } from "../shared/protocol";
 import { EyePreview } from "../components/EyePreview";
 import { StatusPill } from "../components/StatusPill";
+import { formatLogCategory, formatLogEvent, getLogPresentation } from "../utils/logs";
 
 export function Dashboard({ snapshot }: { snapshot: AppSnapshot }) {
   const latest = snapshot.logs.slice(0, 5);
@@ -43,14 +44,17 @@ export function Dashboard({ snapshot }: { snapshot: AppSnapshot }) {
           <span>Recent Events</span>
         </div>
         <div className="event-list">
-          {latest.map((log) => (
-            <div className="event-row" key={log.id}>
-              <time>{log.time}</time>
-              <span>{log.agent}</span>
-              <span>{log.hook}</span>
-              <strong>{log.result}</strong>
-            </div>
-          ))}
+          {latest.map((log) => {
+            const presentation = getLogPresentation(log);
+            return (
+              <div className="event-row" key={log.id}>
+                <time>{log.time}</time>
+                <span>{formatLogCategory(presentation.category)}</span>
+                <span>{formatLogEvent(presentation.event)}</span>
+                <strong>{log.result}</strong>
+              </div>
+            );
+          })}
           {latest.length === 0 && <div className="empty">No events yet</div>}
         </div>
       </div>

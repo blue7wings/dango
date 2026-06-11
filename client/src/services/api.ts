@@ -32,8 +32,9 @@ function createLog(detail: string): LogEntry {
     id: `${now.getTime()}-${Math.random().toString(16).slice(2)}`,
     time: now.toLocaleTimeString(),
     timestamp: now.getTime(),
-    agent: "browser-preview",
-    hook: "system",
+    source: "browser-preview",
+    category: "system",
+    event: "desktop_unavailable",
     expression: "idle",
     result: "info",
     detail

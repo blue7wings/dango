@@ -40,8 +40,9 @@ export class AppState extends EventEmitter {
     };
 
     this.logs.add({
-      agent: source,
-      hook: event,
+      source,
+      category: "hook",
+      event,
       expression: command.face,
       indicator: command.indicator,
       result: "success",
@@ -61,8 +62,9 @@ export class AppState extends EventEmitter {
       timestamp: Date.now()
     };
     this.logs.add({
-      agent: source,
-      hook: "system",
+      source,
+      category: "system",
+      event: "manual_command",
       expression: command.face,
       indicator: command.indicator,
       result: "info",
