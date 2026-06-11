@@ -127,6 +127,7 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", async () => {
+  state.dispose();
   await webhook.stop();
   await ble.disconnect();
 });

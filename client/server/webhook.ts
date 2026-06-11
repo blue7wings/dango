@@ -102,10 +102,11 @@ export class WebhookServer {
         reply.code(400);
         return { success: false, error: "Invalid command" };
       }
+      const defaults = this.state.commandDefaults();
       const command: DeviceCommand = {
-        face: (face as any) ?? this.state.currentCommand.face,
-        indicator: (indicator as any) ?? this.state.currentCommand.indicator,
-        display: (display as any) ?? this.state.currentCommand.display
+        face: (face as any) ?? defaults.face,
+        indicator: (indicator as any) ?? defaults.indicator,
+        display: (display as any) ?? defaults.display
       };
       await this.controls?.sendCommand(command);
       return this.state.snapshot();
