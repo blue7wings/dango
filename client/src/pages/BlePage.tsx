@@ -1,15 +1,50 @@
 import { Bluetooth, RefreshCw, Save, Signal, Unplug } from "lucide-react";
 import { FormEvent, useState } from "react";
+import { errorMessage, useNotification } from "../components/NotificationProvider";
 import { AppSnapshot, CompanionConfig } from "../shared/protocol";
 import { StatusPill } from "../components/StatusPill";
 import { companionApi } from "../services/api";
 
 export function BlePage({ snapshot }: { snapshot: AppSnapshot }) {
+  const notification = useNotification();
   const [draft, setDraft] = useState<CompanionConfig>(snapshot.config);
+  const [pending, setPending] = useState<"scan" | "disconnect" | "save" | null>(null);
 
   async function save(event: FormEvent) {
     event.preventDefault();
-    await companionApi.updateConfig(draft);
+    setPending("save");
+    try {
+      await companionApi.updateConfig(draft);
+      notification.success("Connection settings saved.");
+    } catch (error) {
+      notification.error(errorMessage(error, "Could not save connection settings."));
+    } finally {
+      setPending(null);
+    }
+  }
+
+  async function reconnect() {
+    setPending("scan");
+    try {
+      await companionApi.reconnect();
+      notification.success("Bluetooth scan started.");
+    } catch (error) {
+      notification.error(errorMessage(error, "Could not start Bluetooth scan."));
+    } finally {
+      setPending(null);
+    }
+  }
+
+  async function disconnect() {
+    setPending("disconnect");
+    try {
+      await companionApi.disconnect();
+      notification.success("Bluetooth device disconnected.");
+    } catch (error) {
+      notification.error(errorMessage(error, "Could not disconnect the Bluetooth device."));
+    } finally {
+      setPending(null);
+    }
   }
 
   return (
@@ -41,13 +76,13 @@ export function BlePage({ snapshot }: { snapshot: AppSnapshot }) {
         </div>
 
         <div className="ble-actions">
-          <button onClick={() => companionApi.reconnect()}>
+          <button disabled={pending !== null} onClick={() => void reconnect()}>
             <RefreshCw size={15} />
-            <span>Scan</span>
+            <span>{pending === "scan" ? "Scanning..." : "Scan"}</span>
           </button>
-          <button onClick={() => companionApi.disconnect()}>
+          <button disabled={pending !== null} onClick={() => void disconnect()}>
             <Unplug size={15} />
-            <span>Disconnect</span>
+            <span>{pending === "disconnect" ? "Disconnecting..." : "Disconnect"}</span>
           </button>
         </div>
 
@@ -95,9 +130,9 @@ export function BlePage({ snapshot }: { snapshot: AppSnapshot }) {
               <small>Scan for the device when Dango starts</small>
             </span>
           </label>
-          <button className="primary" type="submit">
+          <button className="primary" type="submit" disabled={pending !== null}>
             <Save size={15} />
-            <span>Save changes</span>
+            <span>{pending === "save" ? "Saving..." : "Save changes"}</span>
           </button>
         </div>
       </form>

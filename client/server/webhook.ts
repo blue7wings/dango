@@ -57,9 +57,16 @@ export class WebhookServer {
     server.get("/api/agents", async () => inspectAgentHooks());
 
     server.post<{ Body: HookInstallRequest }>("/api/agents/install", async (request, reply) => {
-      if (request.body?.agent !== "codex" && request.body?.agent !== "kiro") {
+      if (
+        (request.body?.agent !== "codex" && request.body?.agent !== "kiro") ||
+        !Array.isArray(request.body?.mappings) ||
+        !request.body.mappings.every((mapping) =>
+          typeof mapping === "object" && mapping !== null &&
+          typeof mapping.triggerId === "string" && typeof mapping.event === "string"
+        )
+      ) {
         reply.code(400);
-        return { success: false, error: "Invalid agent" };
+        return { success: false, error: "Invalid trigger configuration" };
       }
       return installAgentHooks(request.body);
     });

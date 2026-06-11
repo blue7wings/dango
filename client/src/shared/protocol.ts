@@ -86,13 +86,25 @@ export interface AppSnapshot {
 }
 
 export type HookAgentId = "codex" | "kiro";
+export type ExpressionEvent = "stop" | "ai_running" | "tool_use" | "success" | "error" | "permission_request";
+
+export interface HookTrigger {
+  id: string;
+  hookName: string;
+  defaultEvent: ExpressionEvent;
+  description: string;
+}
+
+export interface HookTriggerMapping {
+  triggerId: string;
+  event: ExpressionEvent;
+}
 
 export interface HookTarget {
   id: string;
   name: string;
   path: string;
-  installed: number;
-  total: number;
+  installedMappings: Record<string, ExpressionEvent>;
   writable: boolean;
   error?: string;
 }
@@ -102,18 +114,20 @@ export interface HookAgentConfig {
   name: string;
   description: string;
   path: string;
+  triggers: HookTrigger[];
   targets: HookTarget[];
 }
 
 export interface HookInstallRequest {
   agent: HookAgentId;
+  mappings: HookTriggerMapping[];
   targetIds?: string[];
 }
 
 export interface HookInstallResult {
   success: boolean;
   changedFiles: number;
-  addedHooks: number;
+  changedHooks: number;
   errors: string[];
   agents: HookAgentConfig[];
 }
@@ -124,6 +138,14 @@ export const DEFAULT_CHARACTERISTIC_UUID = "7b8f9a11-2f43-4a6f-8b1e-6f4d3c2b1a90
 export const FACES: Face[] = ["idle", "focused"];
 export const INDICATORS: Indicator[] = ["off", "green_solid", "green_breathe", "yellow_solid", "yellow_breathe", "red_solid", "red_breathe"];
 export const DISPLAY_POWERS: DisplayPower[] = ["on", "off"];
+export const EXPRESSION_EVENTS: { event: ExpressionEvent; label: string }[] = [
+  { event: "stop", label: "Idle" },
+  { event: "ai_running", label: "Working" },
+  { event: "tool_use", label: "Tool Call" },
+  { event: "success", label: "Success" },
+  { event: "error", label: "Error" },
+  { event: "permission_request", label: "Permission" }
+];
 
 export const EVENT_COMMAND_MAP: Record<AgentEvent, Omit<DeviceCommand, "display">> = {
   session_start: { face: "focused", indicator: "green_breathe" },

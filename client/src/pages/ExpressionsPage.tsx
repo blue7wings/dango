@@ -1,18 +1,23 @@
 import { Play } from "lucide-react";
-import { DeviceCommand } from "../shared/protocol";
+import { DeviceCommand, EXPRESSION_EVENTS, resolveCommand } from "../shared/protocol";
 import { EyePreview } from "../components/EyePreview";
 import { companionApi } from "../services/api";
+import { errorMessage, useNotification } from "../components/NotificationProvider";
 
-const PRESETS: { label: string; command: DeviceCommand }[] = [
-  { label: "Idle", command: { face: "idle", indicator: "off", display: "on" } },
-  { label: "Working", command: { face: "focused", indicator: "green_breathe", display: "on" } },
-  { label: "Tool Call", command: { face: "focused", indicator: "yellow_breathe", display: "on" } },
-  { label: "Success", command: { face: "focused", indicator: "green_solid", display: "on" } },
-  { label: "Error", command: { face: "focused", indicator: "red_solid", display: "on" } },
-  { label: "Permission", command: { face: "focused", indicator: "red_breathe", display: "on" } },
-];
+const PRESETS = EXPRESSION_EVENTS.map(({ event, label }) => ({ label, command: resolveCommand(event) }));
 
 export function ExpressionsPage({ currentCommand }: { currentCommand: DeviceCommand }) {
+  const notification = useNotification();
+
+  async function send(label: string, command: DeviceCommand) {
+    try {
+      await companionApi.sendCommand(command);
+      notification.success(`${label} expression sent to Dango.`);
+    } catch (error) {
+      notification.error(errorMessage(error, `Could not send the ${label} expression.`));
+    }
+  }
+
   return (
     <section className="expression-grid">
       {PRESETS.map(({ label, command }) => {
@@ -29,7 +34,7 @@ export function ExpressionsPage({ currentCommand }: { currentCommand: DeviceComm
                 className="icon-command"
                 title={`Send ${label}`}
                 aria-label={`Send ${label}`}
-                onClick={() => companionApi.sendCommand(command)}
+                onClick={() => void send(label, command)}
               >
                 <Play size={15} fill="currentColor" />
               </button>

@@ -1,14 +1,21 @@
 import { useState } from "react";
 import { DeviceCommand, Face, Indicator, DisplayPower, FACES, INDICATORS, DISPLAY_POWERS } from "../shared/protocol";
 import { companionApi } from "../services/api";
+import { errorMessage, useNotification } from "../components/NotificationProvider";
 
 export function DebugPage({ currentCommand }: { currentCommand: DeviceCommand }) {
+  const notification = useNotification();
   const [face, setFace] = useState<Face>(currentCommand.face);
   const [indicator, setIndicator] = useState<Indicator>(currentCommand.indicator);
   const [display, setDisplay] = useState<DisplayPower>(currentCommand.display);
 
-  const send = (command: DeviceCommand) => {
-    void companionApi.sendCommand(command);
+  const send = async (command: DeviceCommand) => {
+    try {
+      await companionApi.sendCommand(command);
+      notification.success("Debug command sent to Dango.");
+    } catch (error) {
+      notification.error(errorMessage(error, "Could not send the debug command."));
+    }
   };
 
   return (
@@ -20,7 +27,7 @@ export function DebugPage({ currentCommand }: { currentCommand: DeviceCommand })
             <button
               key={f}
               className={face === f ? "active" : ""}
-              onClick={() => { setFace(f); send({ face: f, indicator, display }); }}
+              onClick={() => { setFace(f); void send({ face: f, indicator, display }); }}
             >
               {f}
             </button>
@@ -35,7 +42,7 @@ export function DebugPage({ currentCommand }: { currentCommand: DeviceCommand })
             <button
               key={i}
               className={indicator === i ? "active" : ""}
-              onClick={() => { setIndicator(i); send({ face, indicator: i, display }); }}
+              onClick={() => { setIndicator(i); void send({ face, indicator: i, display }); }}
             >
               {i}
             </button>
@@ -50,7 +57,7 @@ export function DebugPage({ currentCommand }: { currentCommand: DeviceCommand })
             <button
               key={d}
               className={display === d ? "active" : ""}
-              onClick={() => { setDisplay(d); send({ face, indicator, display: d }); }}
+              onClick={() => { setDisplay(d); void send({ face, indicator, display: d }); }}
             >
               {d}
             </button>

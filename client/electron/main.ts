@@ -31,10 +31,10 @@ const webhook = new WebhookServer(state, {
     if (next.autoConnect) void ble.scanAndConnect(next);
   },
   syncDisplaySchedule: async () => {
-    await ble.syncDisplaySchedule();
+    if (!await ble.syncDisplaySchedule()) throw new Error("Dango device is not connected or the schedule could not be sent");
   },
   syncIdleTimeout: async () => {
-    await ble.syncIdleTimeout();
+    if (!await ble.syncIdleTimeout()) throw new Error("Dango device is not connected or the idle timeout could not be sent");
   }
 });
 
@@ -79,17 +79,18 @@ function broadcastSnapshot(): void {
 function registerIpc(): void {
   ipcMain.handle("app:getSnapshot", () => state.snapshot());
   ipcMain.handle("app:updateConfig", async (_event, patch: Partial<CompanionConfig>) => {
+    const previousPort = state.snapshot().config.webhookPort;
     const next = state.updateConfig(patch);
-    await webhook.start(next.webhookPort);
+    if (next.webhookPort !== previousPort) await webhook.start(next.webhookPort);
     if (next.autoConnect) void ble.scanAndConnect(next);
     return state.snapshot();
   });
   ipcMain.handle("settings:syncSchedule", async () => {
-    await ble.syncDisplaySchedule();
+    if (!await ble.syncDisplaySchedule()) throw new Error("Dango device is not connected or the schedule could not be sent");
     return state.snapshot();
   });
   ipcMain.handle("settings:syncIdleTimeout", async () => {
-    await ble.syncIdleTimeout();
+    if (!await ble.syncIdleTimeout()) throw new Error("Dango device is not connected or the idle timeout could not be sent");
     return state.snapshot();
   });
   ipcMain.handle("ble:reconnect", async () => {

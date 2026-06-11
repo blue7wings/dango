@@ -1,158 +1,264 @@
-import { Check, CheckCircle2, FileJson, LoaderCircle, RefreshCw, Settings2, TriangleAlert } from "lucide-react";
+import { FileJson, LoaderCircle, RefreshCw, Save, Zap } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { errorMessage, useNotification } from "../components/NotificationProvider";
 import { companionApi } from "../services/api";
-import { HookAgentConfig, HookAgentId, HookInstallResult } from "../shared/protocol";
+import { EXPRESSION_EVENTS, ExpressionEvent, HookAgentConfig, HookAgentId } from "../shared/protocol";
+
+type TriggerMapping = Record<string, ExpressionEvent>;
+type AgentMappings = Record<HookAgentId, TriggerMapping>;
+
+const EMPTY_MAPPINGS: AgentMappings = {
+  codex: {},
+  kiro: {}
+};
 
 export function AgentsPage() {
+  const notification = useNotification();
   const [agents, setAgents] = useState<HookAgentConfig[]>([]);
-  const [selectedKiro, setSelectedKiro] = useState<Set<string>>(new Set());
+  const [activeAgentId, setActiveAgentId] = useState<HookAgentId>("codex");
+  const [triggerMappings, setTriggerMappings] = useState<AgentMappings>(EMPTY_MAPPINGS);
+  const [selectedTargets, setSelectedTargets] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
-  const [installing, setInstalling] = useState<HookAgentId | null>(null);
-  const [result, setResult] = useState<HookInstallResult | null>(null);
+  const [installing, setInstalling] = useState(false);
 
-  async function refresh() {
+  async function refresh(resetSelections = false, announce = false) {
     setLoading(true);
     try {
       const next = await companionApi.getAgentConfigs() as HookAgentConfig[];
       setAgents(next);
-      setSelectedKiro((current) => {
-        const available = new Set(next.find((agent) => agent.id === "kiro")?.targets.map((target) => target.id) ?? []);
-        return new Set([...current].filter((id) => available.has(id)));
-      });
+
+      if (resetSelections) {
+        setTriggerMappings({
+          codex: initialTriggerMappings(next.find((agent) => agent.id === "codex")),
+          kiro: initialTriggerMappings(next.find((agent) => agent.id === "kiro"))
+        });
+        setSelectedTargets(new Set(
+          next.find((agent) => agent.id === "kiro")?.targets
+            .filter((target) => target.writable)
+            .map((target) => target.id) ?? []
+        ));
+      }
+      if (announce) notification.success("Trigger configurations refreshed.");
+    } catch (error) {
+      if (announce) notification.error(errorMessage(error, "Could not refresh trigger configurations."));
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    void refresh();
+    void refresh(true);
   }, []);
 
-  const kiro = useMemo(() => agents.find((agent) => agent.id === "kiro"), [agents]);
-  const allKiroSelected = Boolean(kiro?.targets.length) && kiro!.targets.every((target) => selectedKiro.has(target.id));
+  const activeAgent = useMemo(
+    () => agents.find((agent) => agent.id === activeAgentId),
+    [activeAgentId, agents]
+  );
+  const activeMappings = triggerMappings[activeAgentId];
+  const isKiro = activeAgentId === "kiro";
+  const selectedTargetCount = isKiro ? selectedTargets.size : 1;
+  const canSync = Boolean(activeAgent) && selectedTargetCount > 0 && !installing;
 
-  function toggleKiro(id: string) {
-    setSelectedKiro((current) => {
+  function toggleTrigger(id: string) {
+    if (!activeAgent) return;
+    setTriggerMappings((current) => {
+      const next = { ...current[activeAgentId] };
+      if (next[id]) {
+        delete next[id];
+      } else {
+        next[id] = activeAgent.triggers.find((trigger) => trigger.id === id)?.defaultEvent ?? "ai_running";
+      }
+      return { ...current, [activeAgentId]: next };
+    });
+  }
+
+  function setTriggerEvent(id: string, event: ExpressionEvent) {
+    setTriggerMappings((current) => ({
+      ...current,
+      [activeAgentId]: { ...current[activeAgentId], [id]: event }
+    }));
+  }
+
+  function toggleAllTriggers() {
+    if (!activeAgent) return;
+    const allSelected = activeAgent.triggers.every((trigger) => activeMappings[trigger.id]);
+    setTriggerMappings((current) => ({
+      ...current,
+      [activeAgentId]: allSelected
+        ? {}
+        : Object.fromEntries(activeAgent.triggers.map((trigger) => [trigger.id, current[activeAgentId][trigger.id] ?? trigger.defaultEvent]))
+    }));
+  }
+
+  function toggleTarget(id: string) {
+    setSelectedTargets((current) => {
       const next = new Set(current);
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
   }
 
-  function toggleAllKiro() {
-    setSelectedKiro(allKiroSelected ? new Set() : new Set(kiro?.targets.map((target) => target.id) ?? []));
-  }
-
-  async function install(agent: HookAgentId) {
-    setInstalling(agent);
-    setResult(null);
+  async function syncTriggers() {
+    if (!activeAgent) return;
+    setInstalling(true);
     try {
       const next = await companionApi.installAgentHooks({
-        agent,
-        targetIds: agent === "kiro" ? [...selectedKiro] : undefined
+        agent: activeAgent.id,
+        mappings: Object.entries(activeMappings).map(([triggerId, event]) => ({ triggerId, event })),
+        targetIds: isKiro ? [...selectedTargets] : undefined
       });
-      setResult(next);
       setAgents(next.agents);
+      if (next.success) {
+        notification.success(`${next.changedHooks} trigger changes synced across ${next.changedFiles} files.`);
+      } else {
+        notification.error(next.errors.join("; ") || "Could not sync triggers.");
+      }
+    } catch (error) {
+      notification.error(errorMessage(error, "Could not sync triggers."));
     } finally {
-      setInstalling(null);
+      setInstalling(false);
     }
   }
 
   if (loading && agents.length === 0) {
-    return <div className="agents-loading"><LoaderCircle size={20} className="spin" />Scanning agent configurations</div>;
+    return <div className="agents-loading"><LoaderCircle size={20} className="spin" />Scanning trigger configurations</div>;
   }
 
+  if (!activeAgent) return null;
+
+  const allTriggersSelected = activeAgent.triggers.every((trigger) => activeMappings[trigger.id]);
+  const configuredCount = configuredTriggerCount(activeAgent, isKiro ? selectedTargets : undefined);
+
   return (
-    <section className="agent-config-page">
-      <div className="agent-toolbar">
+    <section className="trigger-page">
+      <div className="trigger-toolbar">
         <div>
-          <strong>Hook configuration</strong>
-          <span>Existing hooks are preserved. Dango commands are appended only when missing.</span>
+          <strong>Agent triggers</strong>
+          <span>Choose which lifecycle events should be sent to Dango.</span>
         </div>
-        <button className="icon-command" title="Refresh configurations" aria-label="Refresh configurations" onClick={() => void refresh()}>
+        <button className="icon-command" title="Refresh configurations" aria-label="Refresh configurations" onClick={() => void refresh(true, true)}>
           <RefreshCw size={16} className={loading ? "spin" : ""} />
         </button>
       </div>
 
-      {result && (
-        <div className={`install-result ${result.success ? "success" : "error"}`}>
-          {result.success ? <CheckCircle2 size={18} /> : <TriangleAlert size={18} />}
-          <span>
-            {result.success
-              ? `${result.addedHooks} hooks added across ${result.changedFiles} files.`
-              : result.errors.join("; ")}
-          </span>
+      <div className="agent-switcher" role="tablist" aria-label="Agent">
+        {agents.map((agent) => (
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeAgentId === agent.id}
+            className={activeAgentId === agent.id ? "active" : ""}
+            key={agent.id}
+            onClick={() => setActiveAgentId(agent.id)}
+          >
+            <Zap size={16} />
+            <span>{agent.name}</span>
+            <small>{agent.triggers.length}</small>
+          </button>
+        ))}
+      </div>
+
+      <article className="trigger-panel">
+        <div className="trigger-panel-header">
+          <div>
+            <h2>{activeAgent.name}</h2>
+            <p>{activeAgent.description}</p>
+          </div>
+          <span>{configuredCount}/{activeAgent.triggers.length} configured</span>
         </div>
-      )}
 
-      {agents.map((agent) => {
-        const installed = agent.targets.reduce((sum, target) => sum + target.installed, 0);
-        const total = agent.targets.reduce((sum, target) => sum + target.total, 0);
-        const complete = total > 0 && installed === total;
-        const isKiro = agent.id === "kiro";
-        const canInstall = isKiro ? selectedKiro.size > 0 : agent.targets.some((target) => target.writable);
+        <div className="trigger-path"><FileJson size={15} /><code>{activeAgent.path}</code></div>
 
-        return (
-          <article className="agent-config-panel" key={agent.id}>
-            <div className="agent-config-header">
-              <div className="agent-icon"><Settings2 size={19} /></div>
-              <div>
-                <h2>{agent.name}</h2>
-                <p>{agent.description}</p>
-              </div>
-              <span className={`hook-summary ${complete ? "complete" : ""}`}>
-                {complete && <Check size={14} />}
-                {installed}/{total || 0} hooks
-              </span>
+        {isKiro && (
+          <div className="trigger-section">
+            <div className="trigger-section-heading">
+              <div><strong>1. Agent files</strong><span>Select where these triggers should be synced.</span></div>
+              <small>{selectedTargets.size} selected</small>
             </div>
-
-            <div className="agent-path"><FileJson size={15} /><code>{agent.path}</code></div>
-
-            {isKiro && agent.targets.length > 0 && (
-              <label className="target-select-all">
-                <input type="checkbox" checked={allKiroSelected} onChange={toggleAllKiro} />
-                <span>Select all agent files</span>
-                <small>{selectedKiro.size} selected</small>
-              </label>
-            )}
-
-            <div className="hook-target-list">
-              {agent.targets.map((target) => {
-                const targetComplete = target.installed === target.total;
-                return (
-                  <label className={`hook-target ${!target.writable ? "disabled" : ""}`} key={target.id}>
-                    {isKiro && (
-                      <input
-                        type="checkbox"
-                        checked={selectedKiro.has(target.id)}
-                        disabled={!target.writable}
-                        onChange={() => toggleKiro(target.id)}
-                      />
-                    )}
-                    <span className="hook-target-name">
-                      <strong>{target.name}</strong>
-                      <code>{target.path}</code>
-                      {target.error && <small>{target.error}</small>}
-                    </span>
-                    <span className={`target-status ${targetComplete ? "complete" : ""}`}>
-                      {targetComplete ? "Configured" : `${target.installed}/${target.total}`}
-                    </span>
-                  </label>
-                );
-              })}
-              {agent.targets.length === 0 && <div className="empty-targets">No JSON configuration files found.</div>}
+            <div className="target-chip-list">
+              {activeAgent.targets.map((target) => (
+                <label className={`target-chip ${!target.writable ? "disabled" : ""}`} key={target.id}>
+                  <input
+                    type="checkbox"
+                    checked={selectedTargets.has(target.id)}
+                    disabled={!target.writable}
+                    onChange={() => toggleTarget(target.id)}
+                  />
+                  <span><strong>{target.name}</strong><code>{target.path}</code></span>
+                  {target.error && <small>{target.error}</small>}
+                </label>
+              ))}
+              {activeAgent.targets.length === 0 && <div className="empty-targets">No Kiro agent JSON files found.</div>}
             </div>
+          </div>
+        )}
 
-            <div className="agent-config-actions">
-              <span>{complete ? "Configuration is up to date" : "Only missing hook commands will be appended"}</span>
-              <button className="primary" disabled={!canInstall || installing !== null} onClick={() => void install(agent.id)}>
-                {installing === agent.id ? <LoaderCircle size={16} className="spin" /> : <Settings2 size={16} />}
-                <span>{complete ? "Verify and sync" : isKiro ? "Add to selected" : "Add hooks"}</span>
-              </button>
-            </div>
-          </article>
-        );
-      })}
+        <div className="trigger-section">
+          <div className="trigger-section-heading">
+            <div><strong>{isKiro ? "2. Expressions" : "Expressions"}</strong><span>Choose the Dango expression triggered by each enabled hook.</span></div>
+            <button type="button" className="text-command" onClick={toggleAllTriggers}>
+              {allTriggersSelected ? "Clear all" : "Select all"}
+            </button>
+          </div>
+
+          <div className="trigger-list">
+            {activeAgent.triggers.map((trigger) => {
+              const enabled = Boolean(activeMappings[trigger.id]);
+              return (
+                <div className={`trigger-row ${enabled ? "enabled" : ""}`} key={trigger.id}>
+                  <input
+                    type="checkbox"
+                    aria-label={`Enable ${trigger.hookName}`}
+                    checked={enabled}
+                    onChange={() => toggleTrigger(trigger.id)}
+                  />
+                  <span className="trigger-copy">
+                    <strong>{trigger.hookName}</strong>
+                    <small>{trigger.description}</small>
+                  </span>
+                  <span className="trigger-event">
+                    <small>triggers</small>
+                    <select
+                      aria-label={`${trigger.hookName} expression`}
+                      disabled={!enabled}
+                      value={activeMappings[trigger.id] ?? trigger.defaultEvent}
+                      onChange={(event) => setTriggerEvent(trigger.id, event.target.value as ExpressionEvent)}
+                    >
+                      {EXPRESSION_EVENTS.map((option) => (
+                        <option value={option.event} key={option.event}>{option.label} ({option.event})</option>
+                      ))}
+                    </select>
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="trigger-actions">
+          <span>{Object.keys(activeMappings).length} of {activeAgent.triggers.length} triggers enabled</span>
+          <button className="primary" disabled={!canSync} onClick={() => void syncTriggers()}>
+            {installing ? <LoaderCircle size={16} className="spin" /> : <Save size={16} />}
+            <span>Sync triggers</span>
+          </button>
+        </div>
+      </article>
     </section>
   );
+}
+
+function initialTriggerMappings(agent: HookAgentConfig | undefined): TriggerMapping {
+  if (!agent) return {};
+  const installed = Object.assign({}, ...agent.targets.map((target) => target.installedMappings));
+  return Object.keys(installed).length > 0
+    ? installed
+    : Object.fromEntries(agent.triggers.map((trigger) => [trigger.id, trigger.defaultEvent]));
+}
+
+function configuredTriggerCount(agent: HookAgentConfig, selectedTargets?: Set<string>): number {
+  const targets = selectedTargets
+    ? agent.targets.filter((target) => selectedTargets.has(target.id))
+    : agent.targets;
+  if (targets.length === 0) return 0;
+  return agent.triggers.filter((trigger) => targets.every((target) => target.installedMappings[trigger.id])).length;
 }

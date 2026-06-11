@@ -1,4 +1,4 @@
-import { Bot, Bug, FileText, Gauge, Radio, Settings, SlidersHorizontal } from "lucide-react";
+import { Bug, FileText, Gauge, Radio, Settings, SlidersHorizontal, Zap } from "lucide-react";
 import { useState } from "react";
 import { useSnapshot } from "./hooks/useSnapshot";
 import { Dashboard } from "./pages/Dashboard";
@@ -9,13 +9,14 @@ import { LogsPage } from "./pages/LogsPage";
 import { DebugPage } from "./pages/DebugPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import dangoLogo from "./assets/dango-logo.png";
+import { NotificationProvider } from "./components/NotificationProvider";
 
 type Page = "dashboard" | "ble" | "agents" | "expressions" | "logs" | "debug" | "settings";
 
 const nav = [
   { id: "dashboard" as const, label: "Dashboard", icon: Gauge },
   { id: "ble" as const, label: "Connection", icon: Radio },
-  { id: "agents" as const, label: "Agents", icon: Bot },
+  { id: "agents" as const, label: "Triggers", icon: Zap },
   { id: "expressions" as const, label: "Expressions", icon: SlidersHorizontal },
   { id: "debug" as const, label: "Debug", icon: Bug },
   { id: "settings" as const, label: "Settings", icon: Settings },
@@ -29,43 +30,45 @@ export default function App() {
   if (!snapshot) return <main className="loading">Loading</main>;
 
   return (
-    <main className="shell">
-      <aside>
-        <div className="brand">
-          <div className="brand-mark">
-            <img src={dangoLogo} alt="Dango" />
+    <NotificationProvider>
+      <main className="shell">
+        <aside>
+          <div className="brand">
+            <div className="brand-mark">
+              <img src={dangoLogo} alt="Dango" />
+            </div>
+            <div>
+              <strong>Dango</strong>
+              <span>Agent Companion</span>
+            </div>
           </div>
-          <div>
-            <strong>Dango</strong>
-            <span>Agent Companion</span>
-          </div>
-        </div>
-        <nav>
-          {nav.map((item) => {
-            const Icon = item.icon;
-            return (
-              <button className={page === item.id ? "active" : ""} key={item.id} onClick={() => setPage(item.id)}>
-                <Icon size={18} />
-                <span>{item.label}</span>
-              </button>
-            );
-          })}
-        </nav>
-      </aside>
+          <nav>
+            {nav.map((item) => {
+              const Icon = item.icon;
+              return (
+                <button className={page === item.id ? "active" : ""} key={item.id} onClick={() => setPage(item.id)}>
+                  <Icon size={18} />
+                  <span>{item.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+        </aside>
 
-      <section className="content">
-        <header>
-          <h1>{nav.find((item) => item.id === page)?.label}</h1>
-        </header>
+        <section className="content">
+          <header>
+            <h1>{nav.find((item) => item.id === page)?.label}</h1>
+          </header>
 
-        {page === "dashboard" && <Dashboard snapshot={snapshot} />}
-        {page === "ble" && <BlePage snapshot={snapshot} />}
-        {page === "agents" && <AgentsPage />}
-        {page === "expressions" && <ExpressionsPage currentCommand={snapshot.currentCommand} />}
-        {page === "debug" && <DebugPage currentCommand={snapshot.currentCommand} />}
-        {page === "settings" && <SettingsPage snapshot={snapshot} />}
-        {page === "logs" && <LogsPage snapshot={snapshot} />}
-      </section>
-    </main>
+          {page === "dashboard" && <Dashboard snapshot={snapshot} />}
+          {page === "ble" && <BlePage snapshot={snapshot} />}
+          {page === "agents" && <AgentsPage />}
+          {page === "expressions" && <ExpressionsPage currentCommand={snapshot.currentCommand} />}
+          {page === "debug" && <DebugPage currentCommand={snapshot.currentCommand} />}
+          {page === "settings" && <SettingsPage snapshot={snapshot} />}
+          {page === "logs" && <LogsPage snapshot={snapshot} />}
+        </section>
+      </main>
+    </NotificationProvider>
   );
 }

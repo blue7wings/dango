@@ -144,13 +144,14 @@ class BrowserHttpApi {
 
   private async postSnapshot(path: string, body?: unknown) {
     try {
+      const hasBody = body !== undefined;
       this.snapshot = await this.request<AppSnapshot>(path, {
         method: "POST",
-        headers: { "content-type": "application/json" },
-        body: body === undefined ? undefined : JSON.stringify(body)
+        headers: hasBody ? { "content-type": "application/json" } : undefined,
+        body: hasBody ? JSON.stringify(body) : undefined
       });
       this.emit();
-    } catch {
+    } catch (error) {
       this.snapshot = {
         ...this.snapshot,
         ble: {
@@ -159,6 +160,7 @@ class BrowserHttpApi {
         }
       };
       this.emit();
+      throw error;
     }
   }
 
@@ -170,7 +172,10 @@ class BrowserHttpApi {
         ...init,
         signal: controller.signal
       });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      if (!response.ok) {
+        const detail = await response.json().catch(() => null) as { message?: string; error?: string } | null;
+        throw new Error(detail?.message ?? detail?.error ?? `HTTP ${response.status}`);
+      }
       return (await response.json()) as T;
     } finally {
       window.clearTimeout(timeout);

@@ -7,7 +7,10 @@ import {
   HookAgentId,
   HookInstallRequest,
   HookInstallResult,
-  HookTarget
+  HookTrigger,
+  HookTarget,
+  ExpressionEvent,
+  EXPRESSION_EVENTS
 } from "../src/shared/protocol.js";
 
 type JsonObject = Record<string, unknown>;
@@ -17,22 +20,26 @@ const CODEX_PATH = path.join(CONFIG_HOME, ".codex", "hooks.json");
 const KIRO_DIR = path.join(CONFIG_HOME, ".kiro", "agents");
 const HOOK_ENDPOINT = "http://127.0.0.1:8787/hook";
 
-const CODEX_EVENTS: Record<string, string> = {
-  SessionStart: "session_start",
-  UserPromptSubmit: "user_prompt_submit",
-  PreToolUse: "tool_call_start",
-  PostToolUse: "tool_call_end",
-  PermissionRequest: "permission_request",
-  Stop: "success"
-};
+const CODEX_TRIGGERS: HookTrigger[] = [
+  { id: "session_start", hookName: "SessionStart", defaultEvent: "ai_running", description: "A Codex thread starts or resumes." },
+  { id: "user_prompt_submit", hookName: "UserPromptSubmit", defaultEvent: "ai_running", description: "The user submits a prompt." },
+  { id: "pre_tool_use", hookName: "PreToolUse", defaultEvent: "tool_use", description: "A supported tool is about to run." },
+  { id: "permission_request", hookName: "PermissionRequest", defaultEvent: "permission_request", description: "Codex is about to request approval." },
+  { id: "post_tool_use", hookName: "PostToolUse", defaultEvent: "ai_running", description: "A supported tool has finished." },
+  { id: "pre_compact", hookName: "PreCompact", defaultEvent: "tool_use", description: "Conversation compaction is about to start." },
+  { id: "post_compact", hookName: "PostCompact", defaultEvent: "ai_running", description: "Conversation compaction has finished." },
+  { id: "subagent_start", hookName: "SubagentStart", defaultEvent: "ai_running", description: "A Codex subagent starts." },
+  { id: "subagent_stop", hookName: "SubagentStop", defaultEvent: "ai_running", description: "A Codex subagent stops." },
+  { id: "stop", hookName: "Stop", defaultEvent: "stop", description: "Codex finishes the current turn." }
+];
 
-const KIRO_EVENTS: Record<string, string> = {
-  agentSpawn: "session_start",
-  userPromptSubmit: "user_prompt_submit",
-  preToolUse: "tool_call_start",
-  postToolUse: "tool_call_end",
-  stop: "success"
-};
+const KIRO_TRIGGERS: HookTrigger[] = [
+  { id: "agent_spawn", hookName: "agentSpawn", defaultEvent: "ai_running", description: "The Kiro agent is activated." },
+  { id: "user_prompt_submit", hookName: "userPromptSubmit", defaultEvent: "ai_running", description: "The user submits a prompt." },
+  { id: "pre_tool_use", hookName: "preToolUse", defaultEvent: "tool_use", description: "A tool is about to run." },
+  { id: "post_tool_use", hookName: "postToolUse", defaultEvent: "ai_running", description: "A tool has finished." },
+  { id: "stop", hookName: "stop", defaultEvent: "stop", description: "Kiro finishes the current turn." }
+];
 
 function commandFor(event: string, source: HookAgentId): string {
   return `curl -s '${HOOK_ENDPOINT}?event=${event}&source=${source}' >/dev/null 2>&1`;
@@ -49,11 +56,14 @@ function commandsIn(value: unknown): string[] {
   return own.concat(Object.values(value).flatMap(commandsIn));
 }
 
-function installedCount(root: JsonObject, events: Record<string, string>, source: HookAgentId): number {
+function installedMappings(root: JsonObject, triggers: HookTrigger[], source: HookAgentId): Record<string, ExpressionEvent> {
   const hooks = isObject(root.hooks) ? root.hooks : {};
-  return Object.entries(events).filter(([hookName, event]) =>
-    commandsIn(hooks[hookName]).includes(commandFor(event, source))
-  ).length;
+  const supportedEvents = new Set(EXPRESSION_EVENTS.map(({ event }) => event));
+  return Object.fromEntries(triggers.flatMap((trigger) => {
+    const command = commandsIn(hooks[trigger.hookName]).find((candidate) => candidate.includes(`${HOOK_ENDPOINT}?`) && candidate.includes(`source=${source}`));
+    const event = command?.match(/[?&]event=([^&'" ]+)/)?.[1];
+    return event && supportedEvents.has(event as ExpressionEvent) ? [[trigger.id, event as ExpressionEvent]] : [];
+  }));
 }
 
 function hooksObject(root: JsonObject): JsonObject {
@@ -116,53 +126,55 @@ function isDangoCommand(cmd: string): boolean {
   return cmd.includes(HOOK_ENDPOINT);
 }
 
-function mergeCodexHooks(root: JsonObject): number {
+function mergeCodexHooks(root: JsonObject, mappings: Map<string, ExpressionEvent>): number {
   const hooks = hooksObject(root);
   let added = 0;
 
-  for (const [hookName, event] of Object.entries(CODEX_EVENTS)) {
-    const entries = eventEntries(hooks, hookName);
-    const command = commandFor(event, "codex");
+  for (const trigger of CODEX_TRIGGERS) {
+    const entries = eventEntries(hooks, trigger.hookName);
+    const event = mappings.get(trigger.id);
     // Remove any existing Dango entries so we always write the latest version.
     const filtered = entries.filter((entry) => !commandsIn([entry]).some(isDangoCommand));
-    filtered.push({
-      matcher: "*",
-      hooks: [{ type: "command", command, timeout: 5 }]
-    });
-    hooks[hookName] = filtered;
-    added += 1;
+    if (event) {
+      filtered.push({
+        hooks: [{ type: "command", command: commandFor(event, "codex"), timeout: 5 }]
+      });
+    }
+    hooks[trigger.hookName] = filtered;
+    if (JSON.stringify(entries) !== JSON.stringify(filtered)) added += 1;
   }
   return added;
 }
 
-function mergeKiroHooks(root: JsonObject): number {
+function mergeKiroHooks(root: JsonObject, mappings: Map<string, ExpressionEvent>): number {
   const hooks = hooksObject(root);
   let added = 0;
 
-  for (const [hookName, event] of Object.entries(KIRO_EVENTS)) {
-    const entries = eventEntries(hooks, hookName);
-    const command = commandFor(event, "kiro");
+  for (const trigger of KIRO_TRIGGERS) {
+    const entries = eventEntries(hooks, trigger.hookName);
+    const event = mappings.get(trigger.id);
     const filtered = entries.filter((entry) => !commandsIn([entry]).some(isDangoCommand));
-    filtered.push({
-      ...(hookName === "preToolUse" || hookName === "postToolUse" ? { matcher: "*" } : {}),
-      command,
-      description: "Sync agent state to Dango"
-    });
-    hooks[hookName] = filtered;
-    added += 1;
+    if (event) {
+      filtered.push({
+        ...(trigger.hookName === "preToolUse" || trigger.hookName === "postToolUse" ? { matcher: "*" } : {}),
+        command: commandFor(event, "kiro"),
+        description: "Sync agent state to Dango"
+      });
+    }
+    hooks[trigger.hookName] = filtered;
+    if (JSON.stringify(entries) !== JSON.stringify(filtered)) added += 1;
   }
   return added;
 }
 
-async function targetFor(filePath: string, events: Record<string, string>, source: HookAgentId): Promise<HookTarget> {
+async function targetFor(filePath: string, triggers: HookTrigger[], source: HookAgentId): Promise<HookTarget> {
   try {
     const root = await readJson(filePath);
     return {
       id: path.basename(filePath),
       name: typeof root.name === "string" ? root.name : path.basename(filePath),
       path: filePath,
-      installed: installedCount(root, events, source),
-      total: Object.keys(events).length,
+      installedMappings: installedMappings(root, triggers, source),
       writable: await isWritable(filePath)
     };
   } catch (error) {
@@ -170,8 +182,7 @@ async function targetFor(filePath: string, events: Record<string, string>, sourc
       id: path.basename(filePath),
       name: path.basename(filePath, ".json"),
       path: filePath,
-      installed: 0,
-      total: Object.keys(events).length,
+      installedMappings: {},
       writable: false,
       error: error instanceof Error ? error.message : String(error)
     };
@@ -195,14 +206,16 @@ export async function inspectAgentHooks(): Promise<HookAgentConfig[]> {
       name: "Codex",
       description: "Append Dango commands to ~/.codex/hooks.json.",
       path: CODEX_PATH,
-      targets: [await targetFor(CODEX_PATH, CODEX_EVENTS, "codex")]
+      triggers: CODEX_TRIGGERS,
+      targets: [await targetFor(CODEX_PATH, CODEX_TRIGGERS, "codex")]
     },
     {
       id: "kiro",
       name: "Kiro CLI",
       description: "Choose Kiro agent files and append hooks without changing existing commands.",
       path: KIRO_DIR,
-      targets: await Promise.all(kiroFiles.map((filePath) => targetFor(filePath, KIRO_EVENTS, "kiro")))
+      triggers: KIRO_TRIGGERS,
+      targets: await Promise.all(kiroFiles.map((filePath) => targetFor(filePath, KIRO_TRIGGERS, "kiro")))
     }
   ];
 }
@@ -210,26 +223,49 @@ export async function inspectAgentHooks(): Promise<HookAgentConfig[]> {
 export async function installAgentHooks(request: HookInstallRequest): Promise<HookInstallResult> {
   const errors: string[] = [];
   let changedFiles = 0;
-  let addedHooks = 0;
+  let changedHooks = 0;
+  const mappings = new Map(request.mappings.map((mapping) => [mapping.triggerId, mapping.event]));
+  const supportedTriggers = request.agent === "codex" ? CODEX_TRIGGERS : KIRO_TRIGGERS;
+  const supportedIds = new Set(supportedTriggers.map((trigger) => trigger.id));
+  const supportedEvents = new Set(EXPRESSION_EVENTS.map(({ event }) => event));
+  for (const [triggerId, event] of mappings) {
+    if (!supportedIds.has(triggerId)) errors.push(`${triggerId}: trigger is not supported by ${request.agent}`);
+    if (!supportedEvents.has(event)) errors.push(`${event}: expression event is not supported`);
+  }
+
+  if (errors.length > 0) {
+    return {
+      success: false,
+      changedFiles,
+      changedHooks,
+      errors,
+      agents: await inspectAgentHooks()
+    };
+  }
 
   if (request.agent === "codex") {
     try {
       const root = await readJson(CODEX_PATH);
-      const added = mergeCodexHooks(root);
+      const added = mergeCodexHooks(root, mappings);
       if (added > 0) {
         await atomicWriteJson(CODEX_PATH, root);
         changedFiles += 1;
-        addedHooks += added;
+        changedHooks += added;
       }
     } catch (error) {
       errors.push(`${CODEX_PATH}: ${error instanceof Error ? error.message : String(error)}`);
     }
   } else if (request.agent === "kiro") {
-    const allowed = new Set(
-      (await readdir(KIRO_DIR, { withFileTypes: true }))
-        .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
-        .map((entry) => entry.name)
-    );
+    let allowed = new Set<string>();
+    try {
+      allowed = new Set(
+        (await readdir(KIRO_DIR, { withFileTypes: true }))
+          .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
+          .map((entry) => entry.name)
+      );
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
     const selected = request.targetIds ?? [];
     for (const targetId of selected) {
       if (!allowed.has(targetId)) {
@@ -239,11 +275,11 @@ export async function installAgentHooks(request: HookInstallRequest): Promise<Ho
       const filePath = path.join(KIRO_DIR, targetId);
       try {
         const root = await readJson(filePath);
-        const added = mergeKiroHooks(root);
+        const added = mergeKiroHooks(root, mappings);
         if (added > 0) {
           await atomicWriteJson(filePath, root);
           changedFiles += 1;
-          addedHooks += added;
+          changedHooks += added;
         }
       } catch (error) {
         errors.push(`${filePath}: ${error instanceof Error ? error.message : String(error)}`);
@@ -254,7 +290,7 @@ export async function installAgentHooks(request: HookInstallRequest): Promise<Ho
   return {
     success: errors.length === 0,
     changedFiles,
-    addedHooks,
+    changedHooks,
     errors,
     agents: await inspectAgentHooks()
   };

@@ -177,22 +177,11 @@ chmod +x scripts/dango-codex-hook.sh
 scripts/dango-codex-hook.sh tool_call_start
 ```
 
-Generated Codex hook shape:
+The Triggers page supports these current lifecycle hooks:
 
-```json
-{
-  "hooks": {
-    "SessionStart": "dango-hook session_start",
-    "UserPromptSubmit": "dango-hook user_prompt_submit",
-    "PreToolUse": "dango-hook tool_call_start",
-    "PostToolUse": "dango-hook tool_call_end",
-    "PermissionRequest": "dango-hook permission_request",
-    "Stop": "dango-hook success"
-  }
-}
-```
+Codex supports `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PermissionRequest`, `PostToolUse`, `PreCompact`, `PostCompact`, `SubagentStart`, `SubagentStop`, and `Stop`. Kiro CLI supports `agentSpawn`, `userPromptSubmit`, `preToolUse`, `postToolUse`, and `stop`.
 
-The desktop Agents page also generates Cursor, Claude Code, and Kiro CLI starter snippets.
+On the Triggers page, each native hook can be enabled independently and mapped to one of the Expressions presets: Idle, Working, Tool Call, Success, Error, or Permission. Syncing preserves non-Dango hooks already present in the configuration file.
 
 ## Cross-Platform Notes
 
