@@ -1,6 +1,6 @@
 {
   "name": "dango-client",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "private": true,
   "description": "Desktop companion for syncing AI agent state to Dango ESP32 over BLE.",
   "author": "blue7wings",
