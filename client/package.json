@@ -39,7 +39,7 @@
   },
   "build": {
     "appId": "dev.dango.agentface",
-    "productName": "Dango Companion",
+    "productName": "Dango",
     "files": [
       "dist",
       "dist-electron",
@@ -48,17 +48,20 @@
     ],
     "mac": {
       "category": "public.app-category.developer-tools",
+      "icon": "assets/icon.icns",
       "target": [
         "dmg",
         "zip"
       ]
     },
     "win": {
+      "icon": "assets/icon.ico",
       "target": [
         "nsis"
       ]
     },
     "linux": {
+      "icon": "assets/icon.png",
       "target": [
         "AppImage",
         "deb"

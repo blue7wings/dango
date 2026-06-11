@@ -44,7 +44,7 @@ async function createWindow(): Promise<void> {
     height: 760,
     minWidth: 900,
     minHeight: 640,
-    title: "Dango Companion",
+    title: "Dango",
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
